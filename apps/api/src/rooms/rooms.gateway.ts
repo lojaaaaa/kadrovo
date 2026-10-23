@@ -191,17 +191,15 @@ export class RoomsGateway
     }
   }
   publish(code: string) {
-    try {
-      for (const socketId of this.server.sockets.adapter.rooms.get(code) ??
-        []) {
-        const s = this.server.sockets.sockets.get(socketId);
-        if (s?.data.auth) {
-          s.emit('room:snapshot', this.rooms.snapshot(code, s.data.auth.token));
-          s.emit('game:personal', this.rooms.personal(code, s.data.auth.token));
-        }
+    for (const socketId of this.server.sockets.adapter.rooms.get(code) ?? []) {
+      const s = this.server.sockets.sockets.get(socketId);
+      if (!s?.data.auth) continue;
+      try {
+        s.emit('room:snapshot', this.rooms.snapshot(code, s.data.auth.token));
+        s.emit('game:personal', this.rooms.personal(code, s.data.auth.token));
+      } catch {
+        // A departed membership must not block updates to remaining players.
       }
-    } catch {
-      /* Last player left or room expired. */
     }
   }
   handleConnection(socket: Socket) {

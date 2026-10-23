@@ -17,10 +17,15 @@ if (!env.DATABASE_URL || !env.WEB_ORIGIN) {
   );
 }
 await mkdir(env.CONTENT_DIR, { recursive: true });
-const migration = spawn('pnpm', ['--filter', '@filmless/api', 'db:migrate'], {
-  env,
-  stdio: 'inherit',
-});
+const migration = spawn(
+  process.execPath,
+  ['node_modules/prisma/build/index.js', 'migrate', 'deploy'],
+  {
+    cwd: '/app/apps/api',
+    env,
+    stdio: 'inherit',
+  },
+);
 await new Promise((resolve, reject) => {
   migration.on('error', reject);
   migration.on('exit', (code) =>
@@ -50,19 +55,19 @@ function stop(code) {
 }
 process.on('SIGTERM', () => stop(0));
 process.on('SIGINT', () => stop(0));
-for (const [command, args] of [
+for (const [command, args, cwd] of [
   ['node', ['apps/api/dist/main.js']],
   [
-    'pnpm',
+    process.execPath,
     [
-      '--filter',
-      '@filmless/web',
+      'node_modules/next/dist/bin/next',
       'start',
       '--port',
       '3000',
       '--hostname',
       '127.0.0.1',
     ],
+    '/app/apps/web',
   ],
   [
     'caddy',
@@ -75,7 +80,7 @@ for (const [command, args] of [
     ],
   ],
 ]) {
-  const child = spawn(command, args, { env, stdio: 'inherit' });
+  const child = spawn(command, args, { env, cwd, stdio: 'inherit' });
   children.push(child);
   child.on('error', (error) => {
     console.error(error);
