@@ -52,7 +52,18 @@ process.on('SIGTERM', () => stop(0));
 process.on('SIGINT', () => stop(0));
 for (const [command, args] of [
   ['node', ['apps/api/dist/main.js']],
-  ['pnpm', ['--filter', '@filmless/web', 'start']],
+  [
+    'pnpm',
+    [
+      '--filter',
+      '@filmless/web',
+      'start',
+      '--port',
+      '3000',
+      '--hostname',
+      '127.0.0.1',
+    ],
+  ],
   [
     'caddy',
     [
