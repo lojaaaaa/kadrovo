@@ -15,6 +15,8 @@ COPY . .
 RUN pnpm db:generate && pnpm build
 
 FROM caddy:2-alpine AS gateway
+# Render disallows elevated file capabilities; port 10000 needs none.
+RUN setcap -r /usr/bin/caddy
 
 FROM base AS runtime
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HUSKY=0

@@ -24,6 +24,14 @@ services:
         value: production
       - key: PORT
         value: '10000'
+      - key: GOMAXPROCS
+        value: '2'
+      - key: UV_THREADPOOL_SIZE
+        value: '2'
+      - key: VIPS_CONCURRENCY
+        value: '2'
+      - key: NODE_OPTIONS
+        value: --v8-pool-size=1
       - key: KINOPOISK_UNOFFICIAL_API_KEY
         sync: false
 
