@@ -1,0 +1,14 @@
+**/node_modules
+**/.next
+**/dist
+**/generated
+.git
+.pnpm-store
+.env
+.env.*
+!.env.example
+reports
+coverage
+**/*.tsbuildinfo
+
+.data/

@@ -1,0 +1,165 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Category {
+  movies
+  series
+  animation
+}
+
+enum AssetKind {
+  poster
+  still
+  backdrop
+}
+
+enum ReviewStatus {
+  automated
+  unreviewed
+  approved
+  rejected
+}
+
+model Title {
+  id           String       @id @default(uuid())
+  nameRu       String
+  originalName String?
+  year         Int?
+  category     Category
+  isSeries     Boolean      @default(false)
+  aliases      TitleAlias[]
+  externalIds  ExternalId[]
+  assets       Asset[]
+  puzzles      Puzzle[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([category, nameRu])
+}
+
+model TitleAlias {
+  id         String @id @default(uuid())
+  titleId    String
+  title      Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  value      String
+  normalized String
+
+  @@unique([titleId, normalized])
+  @@index([normalized])
+}
+
+model ExternalId {
+  id        String @id @default(uuid())
+  titleId   String
+  title     Title  @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  provider  String
+  mediaType String
+  value     String
+
+  @@unique([provider, mediaType, value])
+  @@index([titleId])
+}
+
+model Asset {
+  id                  String       @id @default(uuid())
+  titleId             String
+  title               Title        @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  provider            String
+  sourceUrl           String
+  storageKey          String?
+  kind                AssetKind
+  sourceType          String?
+  width               Int?
+  height              Int?
+  season              Int?
+  episode             Int?
+  rightsStatus        ReviewStatus @default(unreviewed)
+  editorialStatus     ReviewStatus @default(unreviewed)
+  permissionReference String?
+  retrievedAt         DateTime     @default(now())
+
+  @@unique([titleId, provider, sourceUrl])
+  @@index([titleId, kind, rightsStatus, editorialStatus])
+}
+
+enum PuzzleMode {
+  frames
+  spotlight
+}
+model Puzzle {
+  id             String @id @default(uuid())
+  titleId        String
+  title          Title @relation(fields: [titleId], references: [id], onDelete: Cascade)
+  mode           PuzzleMode
+  stageFiles     String[]
+  sourceAssetIds String[]
+  crops          Json?
+  publishedAt    DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@unique([titleId, mode])
+}
+
+model Account {
+  avatar Bytes?
+  avatarVersion String?
+  rating Int @default(1000)
+  battleGames Int @default(0)
+  battleWins Int @default(0)
+  authVersion Int @default(0)
+  id String @id @default(uuid())
+  nickname String
+  email String? @unique
+  passwordHash String?
+  emailVerifiedAt DateTime?
+  createdAt DateTime @default(now())
+  sessions AuthSession[]
+  identities Identity[]
+  challenges AuthChallenge[]
+}
+model Identity {
+  id String @id @default(uuid())
+  provider String
+  subject String
+  accountId String
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  @@unique([provider, subject])
+}
+model AuthSession {
+  authVersion Int @default(0)
+  tokenHash String @id
+  accountId String
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+model AuthChallenge {
+  tokenHash String @id
+  kind String
+  accountId String?
+  account Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  verifier String?
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+
+model DailyChallenge {
+  day String @id
+  titleId String
+}
+
+model BattleResult {
+  matchId String @id
+  firstId String
+  secondId String
+  firstScore Int
+  secondScore Int
+  delta Int
+  createdAt DateTime @default(now())
+}

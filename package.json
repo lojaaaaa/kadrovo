@@ -1,0 +1,53 @@
+{
+  "name": "filmless",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web \"pnpm --filter @filmless/api dev\" \"pnpm --filter @filmless/web dev\"",
+    "build": "pnpm -r build",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "pnpm --filter @filmless/contracts build && pnpm -r typecheck",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm db:generate && pnpm db:validate && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "prepare": "husky",
+    "db:up": "docker compose up -d --wait postgres",
+    "db:down": "docker compose down",
+    "api:probe": "node --env-file-if-exists=.env scripts/probe-content.mjs",
+    "predev": "pnpm --filter @filmless/contracts build",
+    "db:generate": "pnpm --filter @filmless/api db:generate",
+    "db:validate": "pnpm --filter @filmless/api db:validate",
+    "test:smoke": "node scripts/smoke-rooms.mjs",
+    "test:game": "node scripts/smoke-game.mjs",
+    "catalog": "pnpm --filter @filmless/api catalog",
+    "test:content": "pnpm --filter @filmless/api exec tsx src/content/integration.ts",
+    "test:auth": "pnpm --filter @filmless/api exec tsx src/auth/integration.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.2",
+    "typescript-eslint": "^8.46.0",
+    "eslint-config-prettier": "^10.1.0",
+    "prettier": "^3.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.0",
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "concurrently": "^9.2.1",
+    "@types/node": "^24.10.0"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,tsx}": [
+      "eslint --fix --max-warnings 0",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,css}": "prettier --write"
+  }
+}

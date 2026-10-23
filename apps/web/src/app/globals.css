@@ -1,0 +1,293 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@custom-variant dark (&:is(.dark *));
+:root {
+  --background: #000000;
+  --foreground: #f4f4f5;
+  --card: #121214;
+  --card-foreground: #ffffff;
+  --primary: #ff5500;
+  --primary-foreground: #ffffff;
+  --secondary: #1a1a1e;
+  --secondary-foreground: #f4f4f5;
+  --muted: #161618;
+  --muted-foreground: #8e8e93;
+  --accent: #222226;
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --border: #242428;
+  --input: #1a1a1e;
+  --ring: #ff5500;
+  --radius: 1rem;
+}
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text',
+      'Avenir Next', 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    background-color: #000000;
+  }
+}
+
+@layer components {
+  .cinema-panel {
+    background-color: #121214;
+    border: 1px solid #242428;
+  }
+  .cinema-title {
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI',
+      sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The frame yields space to controls; essential actions remain in the viewport. */
+.game-viewport {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: calc(100dvh - 160px);
+  min-height: 430px;
+}
+.gameplay-layout {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+.game-image-group {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 0;
+}
+.game-image {
+  flex: 1;
+  min-height: 130px;
+}
+.game-standings {
+  flex-shrink: 0;
+}
+.answer-form {
+  flex-shrink: 0;
+}
+.answer-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.answer-controls > button {
+  min-width: 110px;
+}
+.game-board > div:first-child {
+  flex-shrink: 0;
+}
+@media (max-width: 639px) {
+  .game-viewport {
+    height: calc(100dvh - 160px);
+    min-height: 380px;
+    gap: 8px;
+  }
+  .game-image {
+    min-height: 90px;
+  }
+  .answer-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+  .answer-input {
+    grid-column: 1 / -1;
+  }
+  .answer-controls > button {
+    min-width: 0;
+  }
+  .game-image-group > div:last-child {
+    font-size: 12px;
+  }
+  .game-standings ol {
+    gap: 12px;
+  }
+}
+@media (orientation: landscape) and (max-height: 650px) and (min-width: 640px) {
+  .game-viewport {
+    height: calc(100dvh - 130px);
+    min-height: 220px;
+  }
+  .gameplay-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr);
+  }
+  .answer-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+  .answer-input {
+    grid-column: 1 / -1;
+  }
+  .answer-controls > button {
+    min-width: 0;
+  }
+  .answer-suggestions {
+    bottom: auto;
+    top: 100%;
+  }
+}
+@layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
+  body {
+    overflow-wrap: break-word;
+  }
+  button,
+  a,
+  input,
+  summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1100px) {
+  .game-viewport {
+    height: calc(100dvh - 150px);
+  }
+}
+@media (pointer: coarse) {
+  input[data-slot='input'] {
+    min-height: 44px;
+  }
+  nav a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 650px) and (min-width: 640px) {
+  .game-image {
+    min-height: 70px;
+  }
+  .game-image-group {
+    gap: 4px;
+  }
+  .gameplay-layout {
+    gap: 8px;
+  }
+}
+
+/* A portrait poster has its own stage instead of a landscape letterbox. */
+.game-spotlight .gameplay-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  align-items: stretch;
+}
+.game-spotlight .game-image-group {
+  align-items: center;
+}
+.game-spotlight .game-image {
+  width: min(100%, 440px);
+  aspect-ratio: 2 / 3;
+  flex: 1;
+  align-self: center;
+  background: #121214;
+  border: 1px solid var(--border);
+}
+.game-spotlight .game-image-group > div:not(.game-image) {
+  width: 100%;
+  max-width: 440px;
+}
+.game-spotlight .answer-form {
+  align-self: center;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+}
+.game-spotlight .answer-controls {
+  grid-template-columns: 1fr 1fr;
+}
+.game-spotlight .answer-input {
+  grid-column: 1 / -1;
+}
+.game-spotlight .answer-suggestions {
+  position: static;
+  margin: 8px 0;
+  grid-column: 1 / -1;
+}
+.game-spotlight .answer-suggestions ul {
+  grid-template-columns: 1fr;
+  max-height: 30dvh;
+}
+.game-spotlight .game-image img {
+  object-fit: contain;
+}
+@media (max-width: 767px) {
+  .game-spotlight .gameplay-layout {
+    display: flex;
+  }
+  .game-spotlight .game-image {
+    width: 100%;
+    max-width: 340px;
+  }
+  .game-spotlight .answer-form {
+    align-self: stretch;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .game-spotlight .answer-suggestions {
+    position: absolute;
+    margin: 0 0 8px;
+  }
+}
+@media (min-width: 1024px) {
+  .party-lobby .lobby-settings {
+    max-height: calc(100dvh - 305px);
+    overflow-y: auto;
+  }
+  .party-lobby .lobby-columns {
+    min-height: 0;
+  }
+}

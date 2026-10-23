@@ -1,0 +1,117 @@
+name: filmless
+x-app: &app
+  image: filmless-app:local
+  pull_policy: never
+  init: true
+  restart: unless-stopped
+services:
+  mailpit:
+    image: axllent/mailpit:v1.29
+    ports:
+      - '127.0.0.1:8025:8025'
+    restart: unless-stopped
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: filmless
+      POSTGRES_PASSWORD: filmless_local
+      POSTGRES_DB: filmless
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U filmless -d filmless']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    <<: *app
+    build: .
+    pull_policy: build
+    restart: 'no'
+    command: ['pnpm', '--filter', '@filmless/api', 'db:migrate']
+    environment:
+      DATABASE_URL: postgresql://filmless:filmless_local@postgres:5432/filmless
+    depends_on:
+      postgres:
+        condition: service_healthy
+  api:
+    <<: *app
+    command: ['pnpm', '--filter', '@filmless/api', 'start']
+    environment:
+      CONTENT_DIR: /app/data/content
+      CONTENT_AUTO_SYNC: ${CONTENT_AUTO_SYNC:-true}
+      LOCAL_CONTENT_PREVIEW: ${LOCAL_CONTENT_PREVIEW:-false}
+      KINOPOISK_UNOFFICIAL_API_KEY: ${KINOPOISK_UNOFFICIAL_API_KEY:-}
+      POISKKINO_API_KEY: ${POISKKINO_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_FROM: ${SMTP_FROM:-Кадрово <hello@filmless.local>}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+      TWITCH_CLIENT_ID: ${TWITCH_CLIENT_ID:-}
+      TWITCH_CLIENT_SECRET: ${TWITCH_CLIENT_SECRET:-}
+      TRUST_PROXY: '1'
+      API_HOST: 0.0.0.0
+      API_PORT: 3001
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      DATABASE_URL: postgresql://filmless:filmless_local@postgres:5432/filmless
+    volumes:
+      - content_data:/app/data/content
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  web:
+    <<: *app
+    command: ['pnpm', '--filter', '@filmless/web', 'start']
+    environment:
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  gateway:
+    image: caddy:2-alpine
+    ports:
+      - '${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-3000}:80'
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1/api/health']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+volumes:
+  content_data:
+  postgres_data:

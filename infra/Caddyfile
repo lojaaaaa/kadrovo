@@ -1,0 +1,9 @@
+:80 {
+  @backend path /api/* /socket.io/*
+  handle @backend {
+    reverse_proxy api:3001
+  }
+  handle {
+    reverse_proxy web:3000
+  }
+}

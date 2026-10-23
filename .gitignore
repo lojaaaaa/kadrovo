@@ -1,0 +1,16 @@
+node_modules/
+.next/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+.husky/_/
+reports/
+apps/api/src/generated/
+.pnpm-store/
+apps/web/next-env.d.ts
+
+.data/

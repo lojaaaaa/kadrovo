@@ -1,0 +1,13 @@
+{
+  admin off
+  auto_https off
+}
+:{$PORT:10000} {
+  @backend path /api/* /socket.io/*
+  handle @backend {
+    reverse_proxy 127.0.0.1:3001
+  }
+  handle {
+    reverse_proxy 127.0.0.1:3000
+  }
+}
