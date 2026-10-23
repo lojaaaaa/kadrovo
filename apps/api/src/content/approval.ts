@@ -1,5 +1,7 @@
 // Local playtesting is explicit and never changes the recorded rights status.
 export function localContentPreview() {
+  // Explicit provider-backed demo mode preserves review records; rejected assets remain excluded.
+  if (process.env.PROVIDER_CONTENT_PREVIEW === 'true') return true;
   if (process.env.LOCAL_CONTENT_PREVIEW !== 'true') return false;
   try {
     const origin = new URL(process.env.WEB_ORIGIN ?? 'http://localhost:3000');

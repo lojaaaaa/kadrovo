@@ -27,3 +27,12 @@ describe('local content preview', () => {
     }
   });
 });
+
+it('allows explicit hosted provider preview without approving rejected assets', () => {
+  vi.stubEnv('PROVIDER_CONTENT_PREVIEW', 'true');
+  vi.stubEnv('WEB_ORIGIN', 'https://example.com');
+  expect(localContentPreview()).toBe(true);
+  expect(approvalWhere().rightsStatus).toEqual({
+    in: ['unreviewed', 'approved'],
+  });
+});

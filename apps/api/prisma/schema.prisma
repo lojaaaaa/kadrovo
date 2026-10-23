@@ -163,3 +163,12 @@ model BattleResult {
   delta Int
   createdAt DateTime @default(now())
 }
+
+model ContentFile {
+  key String @id
+  bytes Bytes
+}
+model ContentState {
+  key String @id
+  value Json
+}

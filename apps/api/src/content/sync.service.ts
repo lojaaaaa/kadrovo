@@ -46,6 +46,14 @@ export class ContentSync implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('Не удалось подготовить часть постеров.');
     }
   }
+  private async persist(state: SyncCheckpoint) {
+    await this.store.db.contentState.upsert({
+      where: { key: 'sync' },
+      create: { key: 'sync', value: JSON.parse(JSON.stringify(state)) },
+      update: { value: JSON.parse(JSON.stringify(state)) },
+    });
+    await saveCheckpoint(state);
+  }
   async run() {
     if (this.busy) return;
     this.busy = true;
@@ -59,10 +67,26 @@ export class ContentSync implements OnModuleInit, OnModuleDestroy {
       : new PoiskKinoClient(key);
     const fingerprint = credentialFingerprint(client.provider, key);
     try {
-      state = await readCheckpoint();
+      const saved = await this.store.db.contentState.findUnique({
+        where: { key: 'sync' },
+      });
+      if (process.env.CONTENT_STORAGE === 'postgres') {
+        const [size] = await this.store.db.$queryRaw<
+          { bytes: string }[]
+        >`SELECT pg_database_size(current_database())::text AS bytes`;
+        if (Number(size?.bytes) > 650_000_000) {
+          this.logger.warn(
+            'Автоимпорт приостановлен: достигнут бюджет хранения демокаталога.',
+          );
+          return;
+        }
+      }
+      state = saved
+        ? (saved.value as unknown as SyncCheckpoint)
+        : await readCheckpoint();
       if (!checkpointReady(state, fingerprint)) return;
       if (Date.now() - state.lastAttempt < 2 * 60 * 60 * 1000) return;
-      const save = () => saveCheckpoint(state!);
+      const save = () => this.persist(state!);
       state.lastAttempt = Date.now();
       await save();
       const type = ['movie', 'tv-series', 'cartoon'][state.index]!;
@@ -85,7 +109,7 @@ export class ContentSync implements OnModuleInit, OnModuleDestroy {
       this.logger.log(JSON.stringify({ type, ...result, next: undefined }));
     } catch (error) {
       if (state && markBlocked(state, fingerprint, error))
-        await saveCheckpoint(state).catch(() => {});
+        await this.persist(state).catch(() => {});
       this.logger.warn(
         error instanceof Error
           ? error.message

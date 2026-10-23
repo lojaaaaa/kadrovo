@@ -1,3 +1,4 @@
+import { CatalogTransferController } from './content/transfer.controller';
 import { RatingService, RatingController } from './rooms/rating.service';
 import { ContentSync } from './content/sync.service';
 import { AuthController } from './auth/auth.controller';
@@ -21,6 +22,7 @@ class HealthController {
 @Module({
   controllers: [
     HealthController,
+    CatalogTransferController,
     RatingController,
     RoomsController,
     ContentController,

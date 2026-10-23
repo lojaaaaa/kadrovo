@@ -1,3 +1,4 @@
+import { json } from 'express';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
@@ -17,6 +18,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
   app.use(helmet());
+  app.use('/api/internal/catalog', json({ limit: '3mb' }));
   app.enableCors({ origin: env.WEB_ORIGIN });
   app.setGlobalPrefix('api');
   app.enableShutdownHooks();

@@ -82,6 +82,15 @@ export async function publishPuzzle(
         sourceAssetIds: ids,
         ...(manifest.mode === 'spotlight' ? { crops: manifest.crops } : {}),
       };
+      if (process.env.CONTENT_STORAGE === 'postgres') {
+        for (let i = 0; i < files.length; i++) {
+          await tx.contentFile.upsert({
+            where: { key: files[i]! },
+            create: { key: files[i]!, bytes: new Uint8Array(images[i]!) },
+            update: {},
+          });
+        }
+      }
       const puzzle = await tx.puzzle.upsert({
         where: {
           titleId_mode: { titleId: manifest.titleId, mode: manifest.mode },

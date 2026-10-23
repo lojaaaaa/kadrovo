@@ -18,7 +18,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { readFile, stat, writeFile, mkdir, rename } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import type {
   CreateRoom,
@@ -77,11 +77,16 @@ export class ContentCatalog
   ) {}
   async onModuleInit() {
     try {
-      this.rotation.restore(
-        JSON.parse(
-          await readFile(join(contentDirectory(), 'rotation.json'), 'utf8'),
-        ),
-      );
+      const state = await this.store.db.contentState.findUnique({
+        where: { key: 'rotation' },
+      });
+      if (state) this.rotation.restore(state.value);
+      else
+        this.rotation.restore(
+          JSON.parse(
+            await readFile(join(contentDirectory(), 'rotation.json'), 'utf8'),
+          ),
+        );
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
         this.logger.warn('История выбора недоступна; начинаем новую ротацию.');
@@ -100,6 +105,11 @@ export class ContentCatalog
     const raw = JSON.stringify(this.rotation.snapshot());
     this.rotationWrites = this.rotationWrites
       .then(async () => {
+        await this.store.db.contentState.upsert({
+          where: { key: 'rotation' },
+          create: { key: 'rotation', value: JSON.parse(raw) },
+          update: { value: JSON.parse(raw) },
+        });
         const dir = contentDirectory();
         await mkdir(dir, { recursive: true });
         const file = join(dir, 'rotation.json');
@@ -135,6 +145,11 @@ export class ContentCatalog
     if (this.busy) return;
     this.busy = true;
     try {
+      const storedFiles = new Set(
+        (
+          await this.store.db.contentFile.findMany({ select: { key: true } })
+        ).map((f) => f.key),
+      );
       const rows = await this.store.db.title.findMany({
         take: 15000,
         orderBy: { createdAt: 'asc' },
@@ -200,7 +215,7 @@ export class ContentCatalog
               if (!/^[a-f0-9-]{36}\/[0-4]\.webp$/.test(file))
                 throw new Error('Invalid asset path');
               const path = join(contentDirectory(), file);
-              const bytes = (await stat(path)).size;
+              const bytes = storedFiles.has(file) ? 0 : (await stat(path)).size;
               if (bytes > 2_000_000) throw new Error('Image budget exceeded');
               return register(file, p.updatedAt.toISOString());
             }),
@@ -266,13 +281,25 @@ export class ContentCatalog
       this.busy = false;
     }
   }
+  private async readMedia(path: string) {
+    try {
+      return await readFile(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      const row = await this.store.db.contentFile.findUnique({
+        where: { key: relative(contentDirectory(), path) },
+      });
+      if (!row) throw new NotFoundException('Изображение недоступно.');
+      return Buffer.from(row.bytes);
+    }
+  }
   async image(key: string) {
     const media = this.media.get(key);
     if (!media) throw new NotFoundException('Изображение недоступно.');
-    if (media.pixel === undefined) return readFile(media.path);
+    if (media.pixel === undefined) return this.readMedia(media.path);
     let cached = this.pixelCache.get(key);
     if (!cached) {
-      cached = await pixelImage(await readFile(media.path), media.pixel);
+      cached = await pixelImage(await this.readMedia(media.path), media.pixel);
       if (this.pixelCache.size >= 64)
         this.pixelCache.delete(this.pixelCache.keys().next().value!);
       this.pixelCache.set(key, cached);
