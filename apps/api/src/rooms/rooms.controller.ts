@@ -1,3 +1,4 @@
+import { interval, map, startWith, distinctUntilChanged } from 'rxjs';
 import {
   BadRequestException,
   Body,
@@ -5,6 +6,8 @@ import {
   Inject,
   Param,
   Post,
+  Get,
+  Sse,
 } from '@nestjs/common';
 import { createRoomSchema, joinRoomSchema } from '@filmless/contracts';
 import { ContentCatalog } from '../content/catalog';
@@ -17,6 +20,20 @@ export class RoomsController {
     @Inject(RoomsService) private readonly rooms: RoomsService,
     @Inject(RoomsGateway) private readonly gateway: RoomsGateway,
   ) {}
+  @Sse('activity/stream') stream() {
+    return interval(2000).pipe(
+      startWith(0),
+      map(() => JSON.stringify(this.rooms.activity())),
+      distinctUntilChanged(),
+      map((raw) => ({ data: JSON.parse(raw) })),
+    );
+  }
+  @Get('public') directory() {
+    return this.rooms.directory();
+  }
+  @Get('activity') activity() {
+    return this.rooms.activity();
+  }
   @Post('daily') async daily() {
     try {
       const { day, question } = await this.catalog.daily();

@@ -7,6 +7,7 @@ import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+const socialLoginVisible = false;
 type Mode = 'login' | 'register' | 'forgot' | 'verify' | 'reset';
 const titles: Record<Mode, string> = {
   login: 'С возвращением',
@@ -200,43 +201,48 @@ export function AccountForm() {
                   >
                     Создать аккаунт
                   </Button>
-                  <Button variant="ghost" onClick={() => switchMode('forgot')}>
+                  <Button
+                    className="hidden"
+                    variant="ghost"
+                    onClick={() => switchMode('forgot')}
+                  >
                     Забыли пароль?
                   </Button>
                 </>
               )}
             </div>
-            {(mode === 'login' || mode === 'register') && (
-              <div className="space-y-3 border-t pt-5">
-                <p className="text-sm text-muted-foreground">
-                  Или войдите через сервис
-                </p>
-                <div className="flex gap-3">
-                  {(['yandex', 'twitch'] as const).map((provider) =>
-                    query.data?.providers[provider] ? (
-                      <a
-                        key={provider}
-                        href={`/api/auth/oauth/${provider}`}
-                        className="rounded-lg border px-4 py-2"
-                      >
-                        {provider === 'yandex' ? 'Яндекс' : 'Twitch'}
-                      </a>
-                    ) : (
-                      <Button key={provider} variant="outline" disabled>
-                        {provider === 'yandex' ? 'Яндекс' : 'Twitch'} · скоро
-                      </Button>
-                    ),
-                  )}
+            {socialLoginVisible &&
+              (mode === 'login' || mode === 'register') && (
+                <div className="space-y-3 border-t pt-5">
+                  <p className="text-sm text-muted-foreground">
+                    Или войдите через сервис
+                  </p>
+                  <div className="flex gap-3">
+                    {(['yandex', 'twitch'] as const).map((provider) =>
+                      query.data?.providers[provider] ? (
+                        <a
+                          key={provider}
+                          href={`/api/auth/oauth/${provider}`}
+                          className="rounded-lg border px-4 py-2"
+                        >
+                          {provider === 'yandex' ? 'Яндекс' : 'Twitch'}
+                        </a>
+                      ) : (
+                        <Button key={provider} variant="outline" disabled>
+                          {provider === 'yandex' ? 'Яндекс' : 'Twitch'} · скоро
+                        </Button>
+                      ),
+                    )}
+                  </div>
+                  {query.data &&
+                    (!query.data?.providers.yandex ||
+                      !query.data?.providers.twitch) && (
+                      <p className="text-xs text-muted-foreground">
+                        Недоступные способы входа ещё подключаются.
+                      </p>
+                    )}
                 </div>
-                {query.data &&
-                  (!query.data.providers.yandex ||
-                    !query.data.providers.twitch) && (
-                    <p className="text-xs text-muted-foreground">
-                      Недоступные способы входа ещё подключаются.
-                    </p>
-                  )}
-              </div>
-            )}
+              )}
           </>
         )}
         {(mutation.error || logout.error || query.error || oauthError) && (

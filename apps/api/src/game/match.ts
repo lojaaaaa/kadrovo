@@ -16,6 +16,7 @@ type Participant = {
   expired: boolean;
   attempts: PlayerRound;
   nextAllowedAt: number;
+  finishOrder?: number;
 };
 export class Match {
   readonly id = randomUUID();
@@ -91,6 +92,7 @@ export class Match {
       this.phase = 'playing';
       this.roundId = randomUUID();
       for (const p of this.players) {
+        p.finishOrder = undefined;
         p.roundScore = 0;
         p.solved = false;
         p.expired = false;
@@ -137,6 +139,18 @@ export class Match {
       return { status: 'finished', score: 0, nextAllowedAt: p.nextAllowedAt };
     const result = p.attempts.answer({ ...command, receivedAt: now });
     if (result.status === 'correct' && !p.solved) {
+      const earlier = this.players.filter((player) => player.solved).length;
+      p.finishOrder = earlier + 1;
+      const previous = this.players.find(
+        (player) => player.finishOrder === earlier,
+      );
+      result.score = Math.max(
+        1,
+        Math.min(
+          result.score - earlier * 2,
+          previous ? previous.roundScore - 2 : 20,
+        ),
+      );
       p.solved = true;
       p.score += result.score;
       p.roundScore = result.score;
@@ -212,13 +226,28 @@ export class Match {
       image: (q[mode] ?? q.frames)[stage]!,
       ...(this.phase === 'playing' ? {} : { answer: q.title }),
       standings: this.players
-        .map(({ playerId, nickname, score, roundScore, solved }) => ({
-          playerId,
-          nickname,
-          score,
-          roundScore,
-          solved,
-        }))
+        .map(
+          ({
+            playerId,
+            nickname,
+            score,
+            roundScore,
+            solved,
+            attempts,
+            expired,
+            finishOrder,
+          }) => ({
+            playerId,
+            nickname,
+            score,
+            roundScore,
+            solved,
+            deadline: attempts.deadline,
+            expired,
+            skipped: attempts.skipped,
+            finishOrder,
+          }),
+        )
         .sort((a, b) => b.score - a.score),
     };
   }

@@ -59,3 +59,22 @@ describe('rooms', () => {
     expect(() => s.snapshot(a.code)).toThrow();
   });
 });
+
+it('lists only public custom lobbies and never exposes membership tokens', () => {
+  const rooms = new RoomsService();
+  const privateRoom = rooms.create({
+    nickname: 'Private',
+    category: 'movies',
+    mode: 'frames',
+  });
+  const publicRoom = rooms.create({
+    nickname: 'Public',
+    category: 'movies',
+    mode: 'frames',
+    visibility: 'public',
+  });
+  const list = rooms.directory();
+  expect(list.map((r) => r.code)).toEqual([publicRoom.code]);
+  expect(JSON.stringify(list)).not.toContain(privateRoom.code);
+  expect(JSON.stringify(list)).not.toContain(publicRoom.token);
+});

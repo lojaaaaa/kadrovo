@@ -28,6 +28,9 @@ type Player = {
   sockets: Set<string>;
 };
 type Room = {
+  visibility: 'public' | 'private';
+  quick?: boolean;
+  quickCapacity?: number;
   format: 'party' | 'solo' | 'battle';
   battleDeadline?: number;
   accounts?: [string, string];
@@ -63,6 +66,7 @@ export class RoomsService {
   ) {}
   tick() {
     this.prune();
+    this.activity();
     const changed: string[] = [];
     for (const r of this.rooms.values())
       if (r.match?.advance(Date.now())) {
@@ -261,6 +265,78 @@ export class RoomsService {
     room.revision++;
     return { code: room.code, token, playerId: player.id };
   }
+  private recent: {
+    id: string;
+    nickname: string;
+    score: number;
+    players: number;
+    finishedAt: number;
+  }[] = [];
+  private recorded = new Set<string>();
+  activity() {
+    for (const room of this.rooms.values()) {
+      const game = room.match?.snapshot(Date.now());
+      if (
+        room.visibility !== 'public' ||
+        !game ||
+        game.phase !== 'finished' ||
+        this.recorded.has(game.matchId)
+      )
+        continue;
+      this.recorded.add(game.matchId);
+      const winner = game.standings[0]!;
+      this.recent.unshift({
+        id: game.matchId,
+        nickname: winner.nickname,
+        score: winner.score,
+        players: game.standings.length,
+        finishedAt: Date.now(),
+      });
+      this.recent = this.recent.slice(0, 30);
+      if (this.recorded.size > 500)
+        this.recorded.delete(this.recorded.values().next().value!);
+    }
+    return this.recent;
+  }
+  directory() {
+    this.prune();
+    return [...this.rooms.values()]
+      .filter(
+        (r) =>
+          r.visibility === 'public' &&
+          r.format === 'party' &&
+          !r.quick &&
+          r.players.length &&
+          !r.match?.active,
+      )
+      .map((r) => ({
+        code: r.code,
+        host: r.players.find((p) => p.id === r.hostId)?.nickname ?? 'Игрок',
+        players: r.players.length,
+        capacity: 8,
+        mode: r.mode,
+        category: r.category,
+      }));
+  }
+  createQuick(players: { nickname: string }[]) {
+    this.catalog.validate?.('movies', 'frames', 'catalog');
+    const first = this.create({
+      nickname: players[0]!.nickname,
+      category: 'movies',
+      mode: 'frames',
+      source: 'catalog',
+      visibility: 'public',
+    });
+    const r = this.room(first.code);
+    const sessions = [first];
+    for (const [i, p] of players.slice(1).entries())
+      sessions.push(this.add(r, `${p.nickname.slice(0, 18)} · ${i + 2}`));
+    r.format = 'battle';
+    r.quick = true;
+    r.quickCapacity = players.length;
+    r.battleDeadline = Date.now() + 60000;
+    return sessions;
+  }
   create(input: CreateRoom) {
     this.prune();
     if (this.rooms.size >= 200)
@@ -273,6 +349,7 @@ export class RoomsService {
     } while (this.rooms.has(code));
     const room: Room = {
       code,
+      visibility: input.visibility ?? 'private',
       format: input.format ?? 'party',
       collection: input.collection ?? 'all',
       roundSeconds: input.roundSeconds ?? 45,
@@ -371,7 +448,14 @@ export class RoomsService {
       source: r.source,
       hostId: r.hostId,
       revision: r.revision,
-      capacity: r.format === 'solo' ? 1 : r.format === 'battle' ? 2 : 8,
+      capacity:
+        r.format === 'solo'
+          ? 1
+          : r.format === 'battle'
+            ? r.quick
+              ? r.players.length
+              : 2
+            : 8,
       expiresAt: r.expiresAt,
       ...(r.match
         ? {
@@ -404,7 +488,7 @@ export class RoomsService {
     if (
       r.format === 'battle' &&
       !r.match &&
-      r.players.length === 2 &&
+      r.players.length === (r.quickCapacity ?? 2) &&
       r.players.every((p) => p.sockets.size)
     )
       r.match = new Match(

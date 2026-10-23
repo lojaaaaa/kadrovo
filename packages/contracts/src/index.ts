@@ -80,6 +80,7 @@ export const timeControlPresets = [
 ] as const;
 export const createRoomSchema = z
   .object({
+    visibility: z.enum(['public', 'private']).optional(),
     collection: collectionSchema.optional(),
     nickname: z.string().trim().min(1).max(24),
     category: categorySchema,
@@ -215,6 +216,10 @@ export type GameSnapshot = {
     score: number;
     roundScore: number;
     solved: boolean;
+    deadline?: number;
+    expired?: boolean;
+    skipped?: boolean;
+    finishOrder?: number;
   }[];
 };
 export type AnswerAck =

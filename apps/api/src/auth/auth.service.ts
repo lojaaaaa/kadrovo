@@ -120,20 +120,31 @@ export class AuthService implements OnModuleDestroy {
     });
   }
   async register(email: string, password: string, nickname: string) {
-    this.mailConfigured();
+    const verificationRequired =
+      process.env.EMAIL_VERIFICATION_REQUIRED === 'true';
+    if (verificationRequired) this.mailConfigured();
     const existing = await this.store.db.account.findUnique({
       where: { email },
     });
-    if (existing?.emailVerifiedAt) return genericMail;
+    if (existing && (!verificationRequired || existing.emailVerifiedAt))
+      return {
+        message: 'Если аккаунт уже существует, войдите с вашим паролем.',
+      };
     const passwordHash = await hashPassword(password);
     const account = await this.store.db.account.upsert({
       where: { email },
-      create: { email, passwordHash, nickname },
+      create: {
+        email,
+        passwordHash,
+        nickname,
+      },
       update: {},
     });
-    if (!account.emailVerifiedAt)
+    if (verificationRequired && !account.emailVerifiedAt)
       await this.sendChallenge(account.id, email, 'verify', passwordHash);
-    return genericMail;
+    return verificationRequired
+      ? genericMail
+      : { message: 'Аккаунт создан. Теперь войдите с почтой и паролем.' };
   }
   async login(email: string, password: string) {
     const a = await this.store.db.account.findUnique({ where: { email } });
@@ -145,7 +156,10 @@ export class AuthService implements OnModuleDestroy {
     );
     if (!a || !valid)
       throw new UnauthorizedException('Неверная почта или пароль.');
-    if (!a.emailVerifiedAt)
+    if (
+      process.env.EMAIL_VERIFICATION_REQUIRED === 'true' &&
+      !a.emailVerifiedAt
+    )
       throw new UnauthorizedException(
         'Подтвердите почту. Повторная регистрация отправит письмо ещё раз.',
       );

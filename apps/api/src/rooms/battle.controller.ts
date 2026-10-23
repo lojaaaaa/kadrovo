@@ -1,5 +1,7 @@
 import {
   Controller,
+  Body,
+  BadRequestException,
   Delete,
   Get,
   Inject,
@@ -23,6 +25,29 @@ export class BattleController {
     const account = await this.auth.require(cookie(req, 'filmless_session'));
     this.limits.take(account.id, 120, 60_000);
     return account;
+  }
+  @Get('quick') async quickStatus(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return this.battle.quickStatus((await this.account(req, res)).id);
+  }
+  @Post('quick') async quickJoin(
+    @Body() body: { kind?: string },
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    sameOrigin(req);
+    if (body?.kind !== 'duel' && body?.kind !== 'group')
+      throw new BadRequestException('Выберите режим.');
+    return this.battle.quickJoin(await this.account(req, res), body.kind);
+  }
+  @Delete('quick') async quickCancel(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    sameOrigin(req);
+    return this.battle.quickCancel((await this.account(req, res)).id);
   }
   @Get() async status(
     @Req() req: Request,

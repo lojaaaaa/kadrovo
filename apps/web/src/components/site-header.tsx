@@ -32,11 +32,8 @@ export function SiteHeader() {
         >
           {[
             { href: '/', label: 'Главная' },
-            { href: '/play/party', label: 'С друзьями' },
             { href: '/play/solo', label: 'Соло' },
-            { href: '/battle', label: 'Батл' },
-            { href: '/collections', label: 'Подборки' },
-            { href: '/ratings', label: 'Рейтинг' },
+            { href: '/online', label: 'Онлайн' },
           ].map((item) => (
             <Link
               key={item.href}

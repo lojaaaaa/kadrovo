@@ -97,7 +97,7 @@ describe('authoritative match', () => {
     expect(() => m.select('a', id, 3, 3500)).toThrow();
     m.select('a', id, 1, 4000);
     expect(m.answer('a', command(m), 5000).score).toBe(16);
-    expect(m.answer('b', command(m), 6000).score).toBe(20);
+    expect(m.answer('b', command(m), 6000).score).toBe(14);
   });
   it('rejects answers after a personal deadline while the opponent can still answer', () => {
     const m = new Match(deck, 'frames', players, 1000);
@@ -195,7 +195,7 @@ describe('authoritative match', () => {
     expect(m.snapshot(2000).phase).toBe('playing');
     expect(m.answer('a', c, 3000)).toEqual(a);
     const b = m.answer('b', command(m), 4000);
-    expect(b.score).toBe(a.score);
+    expect(b.score).toBe(a.score - 2);
     expect(
       m.snapshot(4000).standings.find((p) => p.playerId === 'a')?.score,
     ).toBe(a.score);
@@ -230,4 +230,18 @@ describe('authoritative match', () => {
     expect(m.active).toBe(false);
     expect(m.advance(200000)).toBe(false);
   });
+});
+
+it('exposes personal deadlines and finishing positions while retaining the 20 point maximum', () => {
+  const m = new Match(deck, 'frames', players, 1000);
+  const id = m.snapshot(1000).roundId;
+  m.select('b', id, 1, 1500);
+  expect(
+    m.snapshot(1500).standings.find((p) => p.playerId === 'b')?.deadline,
+  ).toBe(41000);
+  expect(m.answer('a', command(m), 2000).score).toBe(20);
+  expect(m.answer('b', command(m), 3000).score).toBe(14);
+  expect(
+    m.snapshot(3000).standings.find((p) => p.playerId === 'b')?.finishOrder,
+  ).toBe(2);
 });

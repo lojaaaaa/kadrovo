@@ -1,3 +1,4 @@
+import { SoloLaunch } from '@/components/solo-launch';
 import {
   modeSchema,
   collectionSchema,
@@ -44,18 +45,26 @@ export default async function PlayPage({
           </h1>
           <p className="mt-2 text-muted-foreground leading-relaxed">
             {isSolo
-              ? 'Выберите механику, темп и подборку — тренируйтесь в своём ритме.'
+              ? 'Выберите режим и нажмите «Играть».'
               : 'Настройте комнату и поделитесь ссылкой. Друзья присоединятся без регистрации.'}
           </p>
         </div>
       </div>
 
-      <CreateRoomForm
-        initialFormat={format}
-        initialMode={mode}
-        initialCollection={collection}
-        initialCategory={category}
-      />
+      {isSolo ? (
+        <SoloLaunch
+          initialMode={mode}
+          initialCollection={collection}
+          initialCategory={category}
+        />
+      ) : (
+        <CreateRoomForm
+          initialFormat={format}
+          initialMode={mode}
+          initialCollection={collection}
+          initialCategory={category}
+        />
+      )}
 
       {format === 'party' && (
         <div className="mt-6">

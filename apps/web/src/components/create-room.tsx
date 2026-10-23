@@ -92,6 +92,7 @@ export function CreateRoomForm({
   });
 
   const format = initialFormat;
+  const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [totalRounds, setTotalRounds] = useState<RoundCount>(5);
   const [roundSeconds, setRoundSeconds] = useState<15 | 30 | 45 | 60 | 90>(45);
   const [customNickname, setNickname] = useState<string | null>(null);
@@ -132,6 +133,7 @@ export function CreateRoomForm({
         nickname:
           nickname.trim() || (format === 'solo' ? 'Киноман' : 'Капитан'),
         format,
+        visibility,
         roundSeconds,
         totalRounds,
         category,
@@ -153,6 +155,34 @@ export function CreateRoomForm({
         mutation.mutate();
       }}
     >
+      {format === 'party' && (
+        <fieldset className="space-y-3">
+          <legend className="mb-2 font-semibold">Кто может войти?</legend>
+          <div className="grid grid-cols-2 gap-3">
+            {(
+              [
+                { id: 'private', label: 'По ссылке' },
+                { id: 'public', label: 'Открытая комната' },
+              ] as const
+            ).map((item) => (
+              <Button
+                key={item.id}
+                type="button"
+                variant={visibility === item.id ? 'default' : 'outline'}
+                aria-pressed={visibility === item.id}
+                onClick={() => setVisibility(item.id)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {visibility === 'private'
+              ? 'Комната не отображается в списке.'
+              : 'Комната появится в списке лобби, к ней смогут присоединиться другие игроки.'}
+          </p>
+        </fieldset>
+      )}
       {/* 1. Game Mode Cards */}
       <fieldset className="space-y-3">
         <div className="flex items-center justify-between">

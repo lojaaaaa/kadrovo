@@ -226,16 +226,24 @@ export function GameBoard({
             <span>Выйти</span>
           </Button>
           <p
-            className={`rounded-xl px-3 py-2 text-2xl font-black tabular-nums ${
+            className={`rounded-2xl border-2 border-current/20 px-5 py-3 text-4xl sm:text-5xl font-black tabular-nums ${
               remaining <= 5 && game.phase === 'playing'
                 ? 'bg-destructive/20 text-destructive'
                 : 'bg-secondary text-white'
             }`}
             aria-label="Осталось секунд"
           >
-            {game.phase === 'playing' && mine?.solved ? '✓' : remaining}
+            {game.phase === 'playing' && mine?.solved
+              ? '✓'
+              : game.phase === 'playing' && remaining === 0
+                ? '…'
+                : remaining}
             <span className="ml-1 text-sm text-muted-foreground font-normal">
-              {game.phase === 'playing' && mine?.solved ? 'угадано' : 'с'}
+              {game.phase === 'playing' && mine?.solved
+                ? 'угадано'
+                : game.phase === 'playing' && remaining === 0
+                  ? 'ждём игроков'
+                  : 'с'}
             </span>
           </p>
         </div>
@@ -393,7 +401,20 @@ export function GameBoard({
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 font-bold text-primary">
                   <Sparkles className="size-3.5" />
-                  За ответ: +{game.possibleScore ?? 20} очков
+                  {mine?.solved ? 'Заработано: +' : 'За ответ: +'}
+                  {mine?.solved
+                    ? mine.roundScore
+                    : Math.max(
+                        1,
+                        Math.min(
+                          (game.possibleScore ?? 20) -
+                            game.standings.filter((p) => p.solved).length * 2,
+                          ...game.standings
+                            .filter((p) => p.solved)
+                            .map((p) => p.roundScore - 2),
+                        ),
+                      )}{' '}
+                  очков
                 </span>
                 <span className="text-muted-foreground">
                   Кадр {game.stage + 1}/5 · следующий: −5 с, −4 очка
@@ -463,11 +484,11 @@ export function GameBoard({
       </div>
       <Card className="game-standings rounded-xl px-3 py-2">
         <h3 className="sr-only">Счёт</h3>
-        <ol className="flex gap-4 overflow-x-auto">
+        <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {game.standings.map((p) => (
             <li
               key={p.playerId}
-              className="flex shrink-0 items-center justify-between gap-3 text-sm"
+              className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-secondary/40 p-3 text-sm"
             >
               <span>
                 <span className="mr-3 text-muted-foreground">
@@ -477,7 +498,20 @@ export function GameBoard({
                 </span>
                 {p.nickname}
                 {p.playerId === playerId ? ' (вы)' : ''}
-                {p.solved && game.phase === 'playing' ? ' · угадал' : ''}
+                {p.solved && game.phase === 'playing'
+                  ? ` · угадал #${p.finishOrder ?? ''}`
+                  : ''}
+                {game.phase === 'playing' && (
+                  <span className="mt-1 block text-xs font-semibold tabular-nums text-primary">
+                    {p.solved
+                      ? '✓ Готов'
+                      : p.skipped
+                        ? 'Пропустил'
+                        : p.expired || (p.deadline ?? game.endsAt) <= now
+                          ? 'Время вышло'
+                          : `${Math.max(0, Math.ceil(((p.deadline ?? game.endsAt) - now) / 1000))} с · угадывает`}
+                  </span>
+                )}
               </span>
               <strong className="tabular-nums">{p.score}</strong>
             </li>
@@ -609,7 +643,8 @@ function AnswerForm({
             : 'Ваше время вышло'}
         </h3>
         <p className="text-sm text-muted-foreground">
-          Остальные ещё угадывают. Итоги появятся, когда все закончат.
+          Остальные ещё угадывают. Следите за их временем в таблице — следующий
+          раунд начнётся, когда все закончат.
         </p>
       </Card>
     );

@@ -1,3 +1,4 @@
+process.env.EMAIL_VERIFICATION_REQUIRED = 'true';
 import { RatingService } from '../rooms/rating.service';
 import { config } from 'dotenv';
 import assert from 'node:assert/strict';

@@ -136,3 +136,57 @@ describe('solo and random duels', () => {
     expect(queue.status('b').status).toBe('idle');
   });
 });
+
+it('matches four people in a group, starts after all connect, and separates duel queues', () => {
+  const rooms = new RoomsService(catalog);
+  const queue = new BattleService(rooms);
+  const users = ['a', 'b', 'c', 'd'].map((id) => ({ id, nickname: id }));
+  queue.quickJoin({ id: 'duelist', nickname: 'Duelist' }, 'duel');
+  for (const user of users) queue.quickJoin(user, 'group');
+  expect(queue.quickStatus('duelist').status).toBe('waiting');
+  const sessions = users.map((u) => {
+    const status = queue.quickStatus(u.id);
+    if (!('session' in status)) throw new Error('not matched');
+    return status.session!;
+  });
+  expect(new Set(sessions.map((s) => s.code)).size).toBe(1);
+  for (const [i, s] of sessions.entries())
+    rooms.connect(s.code, s.token, String(i));
+  expect(rooms.snapshot(sessions[0]!.code).game?.standings).toHaveLength(4);
+  expect(rooms.directory()).toEqual([]);
+});
+
+it('does not start a four-player match with only three connections', () => {
+  const rooms = new RoomsService(catalog);
+  const sessions = rooms.createQuick(
+    ['a', 'b', 'c', 'd'].map((nickname) => ({ nickname })),
+  );
+  for (const [i, s] of sessions.slice(0, 3).entries())
+    rooms.connect(s.code, s.token, 'three-' + i);
+  expect(rooms.snapshot(sessions[0]!.code).game).toBeUndefined();
+});
+
+it('adds a completed quick match to the activity feed once without leaking room credentials or answers', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(100000);
+  const rooms = new RoomsService(catalog);
+  const sessions = rooms.createQuick([
+    { nickname: 'One' },
+    { nickname: 'Two' },
+  ]);
+  for (const [i, s] of sessions.entries())
+    rooms.connect(s.code, s.token, 'feed-' + i);
+  expect(rooms.activity()).toEqual([]);
+  for (let round = 0; round < 3; round++) {
+    const game = rooms.snapshot(sessions[0]!.code).game!;
+    for (const s of sessions) rooms.skip(s.code, s.token, game.roundId);
+    vi.advanceTimersByTime(3100);
+    rooms.tick();
+  }
+  const feed = rooms.activity();
+  expect(feed).toHaveLength(1);
+  expect(rooms.activity()).toHaveLength(1);
+  expect(JSON.stringify(feed)).not.toContain(sessions[0]!.code);
+  expect(JSON.stringify(feed)).not.toContain(sessions[0]!.token);
+  expect(feed[0]?.players).toBe(2);
+});
