@@ -6,7 +6,12 @@ import {
 } from '@nestjs/common';
 import type { RoomSession } from '@filmless/contracts';
 import { RoomsService } from './rooms.service';
-type Entry = { nickname: string; touched: number; session?: RoomSession };
+type Entry = {
+  subject?: string;
+  nickname: string;
+  touched: number;
+  session?: RoomSession;
+};
 @Injectable()
 export class BattleService {
   private quick = new Map<
@@ -31,7 +36,7 @@ export class BattleService {
     ) {
       const batch = group.slice(0, 8);
       const sessions = this.rooms.createQuick(
-        batch.map((e) => ({ nickname: e.nickname })),
+        batch.map((e) => ({ nickname: e.nickname, subject: e.subject })),
       );
       batch.forEach((e, i) => {
         e.session = sessions[i];
@@ -61,6 +66,7 @@ export class BattleService {
       this.quick.set(account.id, {
         kind,
         nickname: account.nickname,
+        subject: 'account:' + account.id,
         touched: Date.now(),
         queuedAt: Date.now(),
       });
@@ -72,8 +78,8 @@ export class BattleService {
       .slice(0, needed - 1);
     if (peers.length === needed - 1) {
       const sessions = this.rooms.createQuick([
-        ...peers.map(([, e]) => ({ nickname: e.nickname })),
-        account,
+        ...peers.map(([, e]) => ({ nickname: e.nickname, subject: e.subject })),
+        { ...account, subject: 'account:' + account.id },
       ]);
       peers.forEach(([, e], i) => {
         e.session = sessions[i];
@@ -82,6 +88,7 @@ export class BattleService {
       this.quick.set(account.id, {
         kind,
         nickname: account.nickname,
+        subject: 'account:' + account.id,
         touched: Date.now(),
         session: sessions[needed - 1],
       });
@@ -89,6 +96,7 @@ export class BattleService {
       this.quick.set(account.id, {
         kind,
         nickname: account.nickname,
+        subject: 'account:' + account.id,
         touched: Date.now(),
       });
     return this.quickStatus(account.id);
@@ -129,6 +137,7 @@ export class BattleService {
     if (!opponent) {
       this.entries.set(account.id, {
         nickname: account.nickname,
+        subject: 'account:' + account.id,
         touched: Date.now(),
       });
     } else {
@@ -140,6 +149,7 @@ export class BattleService {
       opponent[1].session = sessions[0];
       this.entries.set(account.id, {
         nickname: account.nickname,
+        subject: 'account:' + account.id,
         touched: Date.now(),
         session: sessions[1],
       });

@@ -112,3 +112,8 @@ it('excludes animation episode compilations without excluding real film sequels'
     catalog.deck('animation', 'frames', 'catalog').map((q) => q.title.name),
   ).not.toContain('Маша и Медведь. Зимние серии');
 });
+it('shortens a small collection instead of repeating films inside a match', () => {
+  const deck = fixture().deck('movies', 'frames', 'catalog', 'nineties', 10);
+  expect(deck).toHaveLength(3);
+  expect(new Set(deck.map((q) => q.title.id)).size).toBe(3);
+});

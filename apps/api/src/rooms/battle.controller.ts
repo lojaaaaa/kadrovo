@@ -10,6 +10,7 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { ExperienceService } from './experience.service';
 import { AuthService } from '../auth/auth.service';
 import { cookie, RateLimit, sameOrigin } from '../auth/security';
 import { BattleService } from './battle.service';
@@ -17,12 +18,14 @@ import { BattleService } from './battle.service';
 export class BattleController {
   private limits = new RateLimit();
   constructor(
+    @Inject(ExperienceService) private experience: ExperienceService,
     @Inject(AuthService) private readonly auth: AuthService,
     @Inject(BattleService) private readonly battle: BattleService,
   ) {}
   private async account(req: Request, res: Response) {
     res.setHeader('Cache-Control', 'no-store');
     const account = await this.auth.require(cookie(req, 'filmless_session'));
+    await this.experience.identity(req, res);
     this.limits.take(account.id, 120, 60_000);
     return account;
   }

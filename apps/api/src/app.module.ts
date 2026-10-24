@@ -1,4 +1,6 @@
 import { CatalogTransferController } from './content/transfer.controller';
+import { ExperienceService } from './rooms/experience.service';
+import { ExperienceController } from './rooms/experience.controller';
 import { RatingService, RatingController } from './rooms/rating.service';
 import { ContentSync } from './content/sync.service';
 import { AuthController } from './auth/auth.controller';
@@ -22,6 +24,7 @@ class HealthController {
 @Module({
   controllers: [
     HealthController,
+    ExperienceController,
     CatalogTransferController,
     RatingController,
     RoomsController,
@@ -31,6 +34,7 @@ class HealthController {
   ],
   providers: [
     ContentSync,
+    ExperienceService,
     RatingService,
     AuthService,
     OAuthService,

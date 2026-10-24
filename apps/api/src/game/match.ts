@@ -21,7 +21,7 @@ type Participant = {
   finishOrder?: number;
 };
 export class Match {
-  readonly id = randomUUID();
+  id = randomUUID();
   private roundId = randomUUID();
   private index = 0;
   private phase: GameSnapshot['phase'] = 'playing';
@@ -32,6 +32,29 @@ export class Match {
   private players: Participant[];
   private choiceRounds = new Map<number, TitleOption[]>();
   private departed = new Set<string>();
+  private reviews = new Map<string, NonNullable<GameSnapshot['history']>>();
+  private archived = new Set<number>();
+  private archive() {
+    if (this.archived.has(this.index)) return;
+    this.archived.add(this.index);
+    for (const p of this.players) {
+      const history = this.reviews.get(p.playerId) ?? [];
+      history.push({
+        title: this.deck[this.index]!.title,
+        score: p.roundScore,
+        solved: p.solved,
+        hints: p.attempts.openedStage,
+      });
+      this.reviews.set(p.playerId, history);
+    }
+  }
+  get titleIds() {
+    return this.deck.map((q) => q.title.id);
+  }
+  get questions() {
+    return this.deck;
+  }
+
   constructor(
     private readonly deck: Question[],
     private readonly mode: CreateRoom['mode'],
@@ -41,6 +64,7 @@ export class Match {
     private readonly revealMs = 3_000,
     private readonly answerMode: 'search' | 'choices' = 'search',
     private readonly choicePool: TitleOption[] = [],
+    private readonly cooperative = false,
   ) {
     if (!deck.length || roundMs <= 0 || revealMs <= 0)
       throw new Error('Invalid match settings');
@@ -86,6 +110,18 @@ export class Match {
         const j = randomInt(i + 1);
         [candidates[i], candidates[j]] = [candidates[j]!, candidates[i]!];
       }
+      candidates.sort((a, b) => {
+        const distance = (t: TitleOption) =>
+          t.year !== null && correct.year !== null
+            ? Math.floor(Math.abs(t.year - correct.year) / 5)
+            : 1000;
+        const overlap = (t: TitleOption) =>
+          (t.genres ?? []).filter((g) => correct.genres?.includes(g)).length;
+        return (
+          Number(overlap(b) > 0) - Number(overlap(a) > 0) ||
+          distance(a) - distance(b)
+        );
+      });
       options = [correct];
       for (const t of candidates) {
         if (seen.has(t.id) || names.has(t.name.toLocaleLowerCase('ru')))
@@ -104,6 +140,58 @@ export class Match {
       this.choiceRounds.set(this.index, options);
     }
     return options;
+  }
+  checkpoint() {
+    return {
+      id: this.id,
+      roundId: this.roundId,
+      index: this.index,
+      phase: this.phase,
+      startedAt: this.startedAt,
+      endsAt: this.endsAt,
+      nextAt: this.nextAt,
+      players: this.players.map((p) => ({
+        ...p,
+        attempts: p.attempts.checkpoint(),
+      })),
+      reviews: [...this.reviews],
+      archived: [...this.archived],
+      choices: [...this.choiceRounds],
+    };
+  }
+  restore(state: MatchState, playerId: string) {
+    if (
+      state.players.length !== 1 ||
+      state.index < 0 ||
+      state.index >= this.deck.length
+    )
+      throw new Error('Invalid saved match');
+    this.id = state.id;
+    this.roundId = state.roundId;
+    this.index = state.index;
+    this.phase = state.phase;
+    this.startedAt = state.startedAt;
+    this.endsAt = state.endsAt;
+    this.nextAt = state.nextAt;
+    const old = state.players[0]!;
+    const attempts = new PlayerRound(
+      this.deck[this.index]!.title.id,
+      this.startedAt,
+      Math.max(this.startedAt + 1, this.endsAt),
+    );
+    attempts.restore(old.attempts);
+    this.players = [{ ...old, playerId, attempts }];
+    this.reviews = new Map([
+      [
+        playerId,
+        (state.reviews[0]?.[1] ?? []).map((review, i) => ({
+          ...review,
+          title: this.deck[i]?.title ?? review.title,
+        })),
+      ],
+    ]);
+    this.archived = new Set(state.archived);
+    this.choiceRounds = new Map(state.choices);
   }
   get active() {
     return this.phase !== 'finished';
@@ -132,6 +220,7 @@ export class Match {
     ) {
       this.phase = 'reveal';
       this.stage = 4;
+      this.archive();
       if (now < this.nextAt) break;
       if (this.index === this.deck.length - 1) {
         this.phase = 'finished';
@@ -165,7 +254,10 @@ export class Match {
     if (!p || this.departed.has(playerId) || roundId !== this.roundId)
       throw new Error('Этот раунд уже закончился.');
     if (this.phase !== 'playing') return;
-    p.attempts.skip(now);
+    for (const target of this.cooperative
+      ? this.players.filter((v) => !this.departed.has(v.playerId))
+      : [p])
+      target.attempts.skip(now);
     this.advance(now);
   }
   select(playerId: string, roundId: string, stage: number, now: number) {
@@ -178,7 +270,10 @@ export class Match {
       this.phase !== 'playing'
     )
       throw new Error('Раунд уже завершён.');
-    p.attempts.select(stage, now);
+    for (const target of this.cooperative
+      ? this.players.filter((v) => !this.departed.has(v.playerId))
+      : [p])
+      target.attempts.select(stage, now);
     this.advance(now);
   }
 
@@ -227,6 +322,22 @@ export class Match {
     }
     p.nextAllowedAt = result.nextAllowedAt;
     if (
+      this.cooperative &&
+      (result.status === 'correct' ||
+        (this.answerMode === 'choices' && result.status === 'incorrect'))
+    )
+      for (const other of this.players) {
+        if (other === p || this.departed.has(other.playerId)) continue;
+        other.attempts.answer({ ...command, receivedAt: now });
+        other.solved = p.solved;
+        other.wrong = p.wrong;
+        other.expired = p.expired;
+        other.roundScore = p.roundScore;
+        other.score += p.roundScore;
+        if (p.wrong) other.attempts.finish(now);
+      }
+
+    if (
       this.players
         .filter((player) => !this.departed.has(player.playerId))
         .every((player) => player.solved || player.expired)
@@ -273,6 +384,7 @@ export class Match {
           : 'spotlight'
         : this.mode;
     return {
+      sharedAnswer: this.cooperative,
       answerMode: this.answerMode,
       ...(this.answerMode === 'choices'
         ? {
@@ -284,6 +396,10 @@ export class Match {
             })),
           }
         : {}),
+      history:
+        this.phase === 'finished'
+          ? (this.reviews.get(playerId ?? '') ?? [])
+          : undefined,
       matchId: this.id,
       roundId: this.roundId,
       phase: this.phase,
@@ -336,3 +452,5 @@ export class Match {
     };
   }
 }
+
+export type MatchState = ReturnType<Match['checkpoint']>;

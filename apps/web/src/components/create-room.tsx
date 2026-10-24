@@ -1,5 +1,6 @@
 'use client';
 
+import { TastePicker } from './taste-picker';
 import { HelpTip } from './ui/help-tip';
 import { TextCursorInput, ListChecks, LockKeyhole, Globe2 } from 'lucide-react';
 import { CollectionPicker } from './collection-picker';
@@ -94,6 +95,8 @@ export function CreateRoomForm({
   });
 
   const format = initialFormat;
+  const [sharedAnswer, setSharedAnswer] = useState(false);
+  const [tastes, setTastes] = useState<NonNullable<CreateRoom['tastes']>>([]);
   const [roomName, setRoomName] = useState('');
   const [answerMode, setAnswerMode] = useState<'search' | 'choices'>('search');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
@@ -106,11 +109,10 @@ export function CreateRoomForm({
   const [mode, setMode] = useState<CreateRoom['mode']>(initialMode);
   const [collection, setCollection] =
     useState<NonNullable<CreateRoom['collection']>>(initialCollection);
-  const [chosenSource] = useState<'demo' | 'catalog' | null>(null);
 
   const availability = useQuery({
     queryKey: ['content-availability'],
-    refetchInterval: 30000,
+    refetchInterval: (query) => (query.state.data?.ready ? 30000 : 2000),
     retry: 1,
     queryFn: async () => {
       const response = await fetch('/api/content/availability');
@@ -125,7 +127,7 @@ export function CreateRoomForm({
       ?.categories.find((c) => c.category === category)?.[mode] ?? 0;
 
   const canUseCatalog = availability.data?.ready === true && count >= 3;
-  const source = chosenSource ?? (canUseCatalog ? 'catalog' : 'demo');
+  const source = 'catalog';
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -135,12 +137,14 @@ export function CreateRoomForm({
         visibility,
         name: roomName.trim() || undefined,
         answerMode,
+        sharedAnswer,
+        tastes,
         roundSeconds,
         totalRounds,
         category,
         mode,
         source,
-        collection: source === 'catalog' ? collection : 'all',
+        collection,
       });
       saveSession(session);
       return session;
@@ -170,6 +174,21 @@ export function CreateRoomForm({
               onChange={(e) => setRoomName(e.target.value)}
             />
           </div>
+        )}
+        {format === 'party' && (
+          <details className="mb-4 rounded-xl border p-3 text-sm">
+            <summary className="cursor-pointer">Игра компанией</summary>
+            <label className="my-3 flex gap-2 items-center">
+              <input
+                type="checkbox"
+                checked={sharedAnswer}
+                onChange={(e) => setSharedAnswer(e.target.checked)}
+              />
+              Общий ответ · подтверждает ведущий
+            </label>
+            <p className="mb-2 text-muted-foreground">Любимые эпохи</p>
+            <TastePicker value={tastes} onChange={setTastes} />
+          </details>
         )}
         <fieldset className="room-compact-options">
           <legend className="sr-only">Способ ответа</legend>
@@ -450,10 +469,10 @@ export function CreateRoomForm({
       </div>
 
       {/* 5. Error & Status Notifications */}
-      {!availability.isPending && source === 'catalog' && !canUseCatalog && (
+      {!availability.isPending && !canUseCatalog && (
         <div className="rounded-2xl border border-zinc-800 bg-secondary/50 p-4 text-xs text-muted-foreground">
-          Для выбранной комбинации каталог готовит новые загадки. Игра
-          запустится на проверенной подборке шедевров.
+          Для выбранного режима пока недостаточно фильмов. Выберите другую
+          подборку.
         </div>
       )}
 
@@ -475,7 +494,7 @@ export function CreateRoomForm({
           </span>
           <span>·</span>
           <span className="rounded-md bg-secondary px-2 py-0.5 font-medium text-foreground">
-            {totalRounds} раундов
+            {Math.min(count, totalRounds)} раундов
           </span>
           <span>·</span>
           <span className="rounded-md bg-secondary px-2 py-0.5 font-medium text-foreground">
@@ -483,14 +502,14 @@ export function CreateRoomForm({
           </span>
           <span>·</span>
           <span className="rounded-md bg-secondary px-2 py-0.5 font-medium text-primary">
-            {source === 'demo' ? 'Демо' : 'Каталог'}
+            Каталог
           </span>
         </div>
 
         <Button
           size="lg"
           className="w-full sm:w-auto min-w-56 h-13 rounded-2xl text-base font-bold bg-primary text-primary-foreground hover:brightness-110 shadow-sm active:scale-[0.98] transition-all"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || !canUseCatalog}
         >
           {mutation.isPending ? (
             <span className="flex items-center gap-2">

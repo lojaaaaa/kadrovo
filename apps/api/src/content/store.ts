@@ -62,6 +62,15 @@ export class CatalogStore implements OnModuleDestroy {
           create: { ...key, titleId: title.id },
           update: {},
         });
+        if (input.genres?.length)
+          await tx.contentState.upsert({
+            where: { key: 'metadata:' + title.id },
+            create: {
+              key: 'metadata:' + title.id,
+              value: { genres: input.genres },
+            },
+            update: { value: { genres: input.genres } },
+          });
         for (const value of input.aliases) {
           const normalized = normalizeTitle(value);
           await tx.titleAlias.upsert({

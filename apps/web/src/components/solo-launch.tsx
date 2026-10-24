@@ -9,10 +9,11 @@ import {
   ListChecks,
   Play,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
+  collectionDefinitions,
   modeLabels,
   type CreateRoom,
   type ContentAvailability,
@@ -32,6 +33,12 @@ export function SoloLaunch({
   initialCollection: NonNullable<CreateRoom['collection']>;
 }) {
   const router = useRouter();
+  const [selectedCollection, setSelectedCollection] =
+    useState(initialCollection);
+  const [weekly] = useState(
+    () => collectionDefinitions[1 + (Math.floor(Date.now() / 604800000) % 5)]!,
+  );
+
   const [answerMode, setAnswerMode] = useState<'search' | 'choices'>('search');
   const [mode, setMode] = useState(initialMode);
   const account = useQuery({
@@ -40,27 +47,46 @@ export function SoloLaunch({
   });
   const availability = useQuery({
     queryKey: ['content-availability'],
+    refetchInterval: (query) => (query.state.data?.ready ? 30000 : 2000),
     queryFn: () => api<ContentAvailability>('content/availability'),
   });
+  const availableCount =
+    availability.data?.collections
+      ?.find((c) => c.id === selectedCollection)
+      ?.categories.find((c) => c.category === initialCategory)?.[mode] ??
+    (selectedCollection === 'all'
+      ? (availability.data?.categories.find(
+          (c) => c.category === initialCategory,
+        )?.[mode] ?? 0)
+      : 0);
+  const queueAtLaunch = useRef(false);
   const play = useMutation({
-    mutationFn: () =>
-      api<RoomSession>('rooms', 'POST', {
+    mutationFn: () => {
+      queueAtLaunch.current = localStorage.getItem('kadrovo:queue') === '1';
+      return api<RoomSession>('rooms', 'POST', {
         nickname: account.data?.account?.nickname || 'Киноман',
         format: 'solo',
         answerMode,
-        source:
-          (availability.data?.categories.find(
-            (c) => c.category === initialCategory,
-          )?.[mode] ?? 0) >= 3
-            ? 'catalog'
-            : 'demo',
+        source: 'catalog',
         category: initialCategory,
-        collection: initialCollection,
+        collection: selectedCollection,
         mode,
         totalRounds: 5,
         roundSeconds: 45,
-      }),
-    onSuccess: (s) => {
+      });
+    },
+    onSuccess: async (s) => {
+      if (queueAtLaunch.current) {
+        const queue = await api<{ status: string; session?: RoomSession }>(
+          'battle/quick',
+        ).catch(() => null);
+        if (queue?.session) {
+          saveSession(queue.session);
+          router.replace('/room/' + queue.session.code);
+          return;
+        }
+      }
+      if (window.location.pathname !== '/play/solo') return;
       saveSession(s);
       router.push('/room/' + s.code);
     },
@@ -115,14 +141,37 @@ export function SoloLaunch({
             </Button>
           ))}
         </div>
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Подборка недели:</span>
+          <button
+            className="taste-chip"
+            type="button"
+            aria-pressed={selectedCollection === weekly.id}
+            onClick={() =>
+              setSelectedCollection(
+                selectedCollection === weekly.id ? 'all' : weekly.id,
+              )
+            }
+          >
+            {weekly.name}
+          </button>
+        </div>
         <Button
           className="h-12 w-full text-base"
-          disabled={play.isPending || availability.isPending}
+          disabled={
+            play.isPending || availability.isPending || availableCount < 3
+          }
           onClick={() => play.mutate()}
         >
           <Play aria-hidden="true" />
           {play.isPending ? 'Начинаем…' : 'Играть'}
         </Button>
+        {availableCount < 3 && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Для выбранного режима пока недостаточно фильмов. Выберите другую
+            подборку.
+          </p>
+        )}
         {play.error && (
           <p role="alert" className="mt-3 text-destructive">
             {play.error.message}

@@ -9,4 +9,5 @@ export async function roomRequest(
 }
 export function saveSession(session: RoomSession) {
   localStorage.setItem(sessionKey(session.code), JSON.stringify(session));
+  localStorage.setItem('kadrovo:active-room', session.code);
 }

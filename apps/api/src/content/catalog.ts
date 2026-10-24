@@ -46,7 +46,9 @@ export interface GameCatalog {
     source?: 'demo' | 'catalog',
     collection?: CollectionId,
     count?: number,
+    preferences?: { seen?: Record<string, number>; tastes?: CollectionId[] },
   ): Question[];
+  byIds?(ids: string[], source: 'demo' | 'catalog'): Question[];
   search(
     category: CreateRoom['category'],
     query: string,
@@ -175,6 +177,16 @@ export class ContentCatalog
           },
         },
       });
+      const metadata = await this.store.db.contentState.findMany({
+        where: { key: { startsWith: 'metadata:' } },
+        take: 15000,
+      });
+      const genres = new Map(
+        metadata.map((r) => [
+          r.key.slice(9),
+          (r.value as { genres?: string[] })?.genres ?? [],
+        ]),
+      );
       const published = await this.store.db.puzzle.findMany({
         take: 20000,
         orderBy: { updatedAt: 'desc' },
@@ -229,6 +241,7 @@ export class ContentCatalog
           );
           const q = byTitle.get(p.titleId) ?? {
             title: {
+              genres: genres.get(p.title.id),
               id: p.title.id,
               name: p.title.nameRu,
               year: p.title.year,
@@ -259,6 +272,7 @@ export class ContentCatalog
       this.titles = rows.map((t) =>
         searchEntry(
           {
+            genres: genres.get(t.id),
             id: t.id,
             name: t.nameRu,
             posterUrl: safePoster(t.assets[0]?.sourceUrl),
@@ -416,18 +430,65 @@ export class ContentCatalog
     source: 'demo' | 'catalog' = 'demo',
     collection: CollectionId = 'all',
     count = 3,
+    preferences?: { seen?: Record<string, number>; tastes?: CollectionId[] },
   ) {
     if (source === 'demo')
       return this.demo.deck(category, mode, source, collection, count);
-    const deck = this.eligible(category, mode, collection);
+    let deck = this.eligible(category, mode, collection);
+    if (preferences?.tastes?.length) {
+      const lists = collectionDefinitions.filter((c) =>
+        preferences.tastes!.includes(c.id),
+      );
+      const filtered = deck.filter((q) =>
+        lists.some(
+          (c) =>
+            q.title.year !== null &&
+            q.title.year >= c.from &&
+            q.title.year <= c.to,
+        ),
+      );
+      if (filtered.length >= 3) deck = filtered;
+    }
+
     if (deck.length < 3)
       throw new Error(
         'Для выбранных категории и режима нужны хотя бы три опубликованные загадки.',
       );
     const total = Number.isInteger(count) && count > 0 ? count : 3;
-    const result = this.rotation.pick(deck, total);
+    const lists = collectionDefinitions.filter((c) =>
+      preferences?.tastes?.includes(c.id),
+    );
+    const affinity = (q: Question) =>
+      lists.reduce(
+        (n, c) =>
+          n +
+          (q.title.year !== null &&
+          q.title.year >= c.from &&
+          q.title.year <= c.to
+            ? preferences!.tastes!.filter((v) => v === c.id).length
+            : 0),
+        0,
+      );
+    const result = this.rotation.pick(
+      deck,
+      Math.min(total, deck.length),
+      (a, b) =>
+        Number(!!preferences?.seen?.[a.title.id]) -
+          Number(!!preferences?.seen?.[b.title.id]) ||
+        affinity(b) - affinity(a) ||
+        (preferences?.seen?.[a.title.id] ?? 0) -
+          (preferences?.seen?.[b.title.id] ?? 0),
+    );
     this.scheduleRotation();
     return result;
+  }
+  byIds(ids: string[], source: 'demo' | 'catalog') {
+    const pool = source === 'demo' ? this.demo.byIds(ids) : this.questions;
+    return ids.map((id) => {
+      const q = pool.find((q) => q.title.id === id);
+      if (!q) throw new Error('Один из фильмов пока недоступен.');
+      return q;
+    });
   }
   options(
     category: CreateRoom['category'],
@@ -460,6 +521,7 @@ export class ContentCatalog
 @Controller('content')
 export class ContentController {
   constructor(
+    @Inject(CatalogStore) private readonly store: CatalogStore,
     @Inject(ContentCatalog) private readonly catalog: ContentCatalog,
   ) {}
   @Get('image/:key') async image(
@@ -471,6 +533,20 @@ export class ContentController {
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.type('image/webp').send(image);
+  }
+  @Get('health') async health() {
+    const state = await this.store.db.contentState.findUnique({
+      where: { key: 'catalog-health' },
+    });
+    return {
+      ready: this.catalog.availability().ready,
+      titles:
+        this.catalog.options('movies').length +
+        this.catalog.options('series').length +
+        this.catalog.options('animation').length,
+      categories: this.catalog.availability().categories,
+      lastImport: state?.value ?? null,
+    };
   }
   @Get('availability') availability() {
     return this.catalog.availability();

@@ -1,27 +1,19 @@
 'use client';
 import { roundClock } from '@/lib/round-clock';
-import { Skeleton } from './ui/skeleton';
+import { GameReview } from './game-review';
+import { FrameReport } from './frame-report';
+import { FramePlayer } from './frame-player';
 import { HelpTip } from './ui/help-tip';
 import { m } from './motion-system';
-import { AnimatePresence } from 'motion/react';
-import {
-  LogOut,
-  ChevronLeft,
-  ChevronRight,
-  Film,
-  Sparkles,
-  RotateCcw,
-  Share2,
-  Settings2,
-} from 'lucide-react';
-import Link from 'next/link';
+import { LogOut, Film, Sparkles } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { playSound } from '@/lib/sound';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import {
   modeLabels,
-  categoryLabels,
+  type RoomSession,
+  type RoomSnapshot,
   type GameSnapshot,
   type GamePersonal,
   type TitleOption,
@@ -44,10 +36,14 @@ export function GameBoard({
   leave,
   restart,
   restarting,
-  isHost,
-  format,
+  room,
+  session,
+  rematch,
   onOpenLobby,
 }: {
+  room: RoomSnapshot;
+  session: RoomSession;
+  rematch: () => void;
   game: GameSnapshot;
   personal: GamePersonal | null;
   getSocket: () => Socket | null;
@@ -61,8 +57,6 @@ export function GameBoard({
   format?: 'party' | 'solo' | 'battle';
   onOpenLobby?: () => void;
 }) {
-  const [loadedImage, setLoadedImage] = useState<string | null>(null);
-  const [failedImage, setFailedImage] = useState<string | null>(null);
   const [clock, setClock] = useState({ anchor: receivedAt, elapsed: 0 });
   useEffect(() => {
     const update = () =>
@@ -153,6 +147,7 @@ export function GameBoard({
         return;
       if (
         game.phase !== 'playing' ||
+        (room.sharedAnswer && room.hostId !== playerId) ||
         !connected ||
         remaining === 0 ||
         mine?.solved
@@ -197,25 +192,29 @@ export function GameBoard({
     mine?.solved,
     navigating,
     navigate,
+    room.sharedAnswer,
+    room.hostId,
+    playerId,
   ]);
-  if (game.phase === 'finished') {
+  if (game.phase === 'finished')
     return (
-      <FinishedGameScreen
+      <GameReview
         game={game}
         playerId={playerId}
+        room={room}
+        session={session}
         leave={leave}
         restart={restart}
         restarting={restarting}
-        isHost={isHost}
-        format={format}
+        rematch={rematch}
         onOpenLobby={onOpenLobby}
       />
     );
-  }
+  const spectator = !!room.sharedAnswer && room.hostId !== playerId;
 
   return (
     <section
-      className={`game-board ${game.mode === 'spotlight' ? 'game-spotlight' : ''} rounded-2xl border border-border/70 surface-panel bg-card p-3 sm:p-4 game-viewport`}
+      className={`game-board ${game.standings.length === 1 ? 'game-solo' : ''} ${game.mode === 'spotlight' ? 'game-spotlight' : ''} rounded-2xl border border-border/70 surface-panel bg-card p-3 sm:p-4 game-viewport`}
       aria-label="Партия"
     >
       <div className="game-topbar flex items-center justify-between gap-4">
@@ -223,6 +222,11 @@ export function GameBoard({
           <p className="text-sm text-muted-foreground">
             Раунд {game.roundNumber} из {game.totalRounds}
           </p>
+          {game.standings.length === 1 && (
+            <p className="text-xs text-muted-foreground">
+              Счёт: <strong className="text-primary">{mine?.score ?? 0}</strong>
+            </p>
+          )}
           <h2 className="mt-0.5 text-lg font-bold text-white">
             {modeLabels[game.mode]}
           </h2>
@@ -253,153 +257,22 @@ export function GameBoard({
       </div>
       <div className="gameplay-layout">
         <div className="game-image-group">
-          <div className="game-image frame-stage relative rounded-xl border bg-black/60">
-            <AnimatePresence initial={false}>
-              {loadedImage && failedImage !== game.image && (
-                <m.div
-                  key={loadedImage}
-                  className="frame-glow"
-                  aria-hidden="true"
-                  style={{
-                    backgroundImage: `url(${JSON.stringify(loadedImage)})`,
-                  }}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.3 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.55, ease: 'easeInOut' }}
-                />
-              )}
-            </AnimatePresence>
-            {loadedImage !== game.image && failedImage !== game.image && (
-              <Skeleton
-                className="absolute inset-0 z-[2] size-full"
-                aria-label="Загрузка кадра"
-                role="status"
-              />
-            )}
-            {failedImage === game.image && (
-              <p
-                className="absolute inset-0 z-[2] grid place-items-center text-sm text-muted-foreground"
-                role="status"
-              >
-                Не удалось загрузить изображение
-              </p>
-            )}
-            {/* Server sends only the current raster image; future hints are never preloaded. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={game.image}
-              onError={() => setFailedImage(game.image)}
-              onLoad={(event) => {
-                setLoadedImage(game.image);
-                const image = event.currentTarget;
-                image.classList.remove('game-frame-ready');
-                // Restart only after a new image loads, never on timer updates.
-                void image.offsetWidth;
-                image.classList.add('game-frame-ready');
-              }}
-              alt={`Визуальная подсказка ${game.stage + 1} из 5`}
-              width={600}
-              height={600}
-              className="frame-picture absolute inset-0 size-full object-contain select-none pointer-events-none"
-            />
-            {game.phase === 'playing' && (
-              <>
-                {/* Split-click Left Zone (Previous Hint · Free) */}
-                <button
-                  type="button"
-                  aria-label="Предыдущий кадр (нажмите слева)"
-                  title="Предыдущий кадр · бесплатно"
-                  disabled={
-                    !connected ||
-                    navigating ||
-                    game.stage === 0 ||
-                    remaining === 0 ||
-                    !!mine?.solved
-                  }
-                  onClick={() => {
-                    playSound('whoosh');
-                    navigate(game.stage - 1);
-                  }}
-                  className="group/left absolute inset-y-0 left-0 w-1/2 z-10 cursor-pointer focus:outline-none"
-                >
-                  <span className="absolute left-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white/80 opacity-0 shadow-lg transition-opacity group-hover/left:opacity-100">
-                    <ChevronLeft className="size-6" />
-                  </span>
-                </button>
-
-                {/* Split-click Right Zone (Next Hint · -5s, -4 pts) */}
-                <button
-                  type="button"
-                  aria-label={
-                    game.stage < unlocked
-                      ? 'Следующий открытый кадр (нажмите справа)'
-                      : 'Новый кадр (нажмите справа): минус 5 секунд и 4 очка'
-                  }
-                  title={
-                    game.stage < unlocked
-                      ? 'Следующий кадр · бесплатно'
-                      : 'Новый кадр · −5 секунд, −4 очка'
-                  }
-                  disabled={
-                    !connected ||
-                    navigating ||
-                    game.stage === 4 ||
-                    remaining === 0 ||
-                    !!mine?.solved
-                  }
-                  onClick={() => {
-                    playSound('whoosh');
-                    navigate(game.stage + 1);
-                  }}
-                  className="group/right absolute inset-y-0 right-0 w-1/2 z-10 cursor-pointer focus:outline-none"
-                >
-                  <span className="absolute right-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/70 text-white/80 opacity-0 shadow-lg transition-opacity group-hover/right:opacity-100">
-                    <ChevronRight className="size-6" />
-                  </span>
-                </button>
-
-                {/* Mobile & visible bottom circular buttons */}
-                <button
-                  type="button"
-                  aria-label="Предыдущий кадр"
-                  disabled={
-                    !connected ||
-                    navigating ||
-                    game.stage === 0 ||
-                    remaining === 0 ||
-                    !!mine?.solved
-                  }
-                  onClick={() => {
-                    playSound('whoosh');
-                    navigate(game.stage - 1);
-                  }}
-                  className="absolute left-2 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/75 text-white shadow-lg hover:bg-black focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-25"
-                >
-                  <ChevronLeft />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Следующий кадр"
-                  disabled={
-                    !connected ||
-                    navigating ||
-                    game.stage === 4 ||
-                    remaining === 0 ||
-                    !!mine?.solved
-                  }
-                  onClick={() => {
-                    playSound('whoosh');
-                    navigate(game.stage + 1);
-                  }}
-                  className="absolute right-2 top-1/2 z-20 flex size-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-black/75 text-white shadow-lg hover:bg-black focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-25"
-                >
-                  <ChevronRight />
-                </button>
-              </>
-            )}
-          </div>
-
+          <FramePlayer
+            game={game}
+            disabled={
+              spectator ||
+              !connected ||
+              navigating ||
+              remaining === 0 ||
+              !!mine?.solved ||
+              !!mine?.wrong ||
+              !!game.personalSkipped
+            }
+            navigate={(stage) => {
+              playSound('whoosh');
+              navigate(stage);
+            }}
+          />
           <div
             className="flex shrink-0 gap-2"
             aria-label={`Открыто ${game.phase === 'playing' ? unlocked + 1 : 5} из 5 подсказок`}
@@ -420,21 +293,30 @@ export function GameBoard({
                     ? 'Штраф: '
                     : mine?.solved
                       ? 'Заработано: +'
-                      : 'За ответ: +'}
+                      : game.personalSkipped ||
+                          game.personalExpired ||
+                          remaining === 0
+                        ? 'Результат: '
+                        : 'За ответ: +'}
                   {mine?.wrong
                     ? -4
                     : mine?.solved
                       ? mine.roundScore
-                      : Math.max(
-                          1,
-                          Math.min(
-                            (game.possibleScore ?? 20) -
-                              game.standings.filter((p) => p.solved).length * 2,
-                            ...game.standings
-                              .filter((p) => p.solved)
-                              .map((p) => p.roundScore - 2),
-                          ),
-                        )}{' '}
+                      : game.personalSkipped ||
+                          game.personalExpired ||
+                          remaining === 0
+                        ? 0
+                        : Math.max(
+                            1,
+                            Math.min(
+                              (game.possibleScore ?? 20) -
+                                game.standings.filter((p) => p.solved).length *
+                                  2,
+                              ...game.standings
+                                .filter((p) => p.solved)
+                                .map((p) => p.roundScore - 2),
+                            ),
+                          )}{' '}
                   очков
                 </span>
                 <span className="frame-position">
@@ -455,7 +337,11 @@ export function GameBoard({
             </div>
           )}
         </div>
-        {game.phase === 'playing' ? (
+        {game.phase === 'playing' && spectator ? (
+          <Card role="status" className="p-4">
+            Обсуждайте фильм вместе. Ответ и подсказки выбирает ведущий.
+          </Card>
+        ) : game.phase === 'playing' ? (
           <AnswerForm
             key={game.roundId}
             game={game}
@@ -508,56 +394,61 @@ export function GameBoard({
           </Card>
         )}
       </div>
-      <Card className="game-standings rounded-xl px-3 py-2">
-        <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-          Игроки · время · очки
-        </h3>
-        <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {game.standings.map((p) => (
-            <m.li
-              initial={{ opacity: 0.6 }}
-              animate={{ opacity: 1 }}
-              key={p.playerId}
-              className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-secondary/60 p-2 text-sm"
-            >
-              <span>
-                <span className="mr-3 text-muted-foreground">
-                  {game.standings.findIndex(
-                    (other) => other.score === p.score,
-                  ) + 1}
-                </span>
-                {p.nickname}
-                {p.playerId === playerId ? ' (вы)' : ''}
-                {p.solved && game.phase === 'playing'
-                  ? ` · угадал #${p.finishOrder ?? ''}`
-                  : ''}
-                {game.phase === 'playing' && (
-                  <span className="mt-1 block text-xs font-semibold tabular-nums text-primary">
-                    {p.solved
-                      ? '✓ Готов'
-                      : p.wrong
-                        ? 'Неверный ответ · −4'
-                        : p.skipped
-                          ? 'Пропустил'
-                          : p.expired || (p.deadline ?? game.endsAt) <= now
-                            ? 'Время вышло'
-                            : `${Math.max(0, Math.ceil(((p.deadline ?? game.endsAt) - now) / 1000))} с · угадывает`}
-                  </span>
-                )}
-              </span>
-              <m.strong
-                key={p.score}
-                initial={{ opacity: 0.5 }}
+      <FrameReport key={`${game.roundId}:${game.stage}`} session={session} />
+      {game.standings.length > 1 && (
+        <Card className="game-standings rounded-xl px-3 py-2">
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+            {game.standings.length === 1 ? 'Ваш счёт' : 'Игроки · время · очки'}
+          </h3>
+          <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {game.standings.map((p) => (
+              <m.li
+                initial={{ opacity: 0.6 }}
                 animate={{ opacity: 1 }}
-                className="text-xl tabular-nums text-primary"
+                key={p.playerId}
+                className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-secondary/60 p-2 text-sm"
               >
-                {p.score}
-                <span className="ml-1 text-xs text-muted-foreground">оч.</span>
-              </m.strong>
-            </m.li>
-          ))}
-        </ol>
-      </Card>
+                <span>
+                  <span className="mr-3 text-muted-foreground">
+                    {game.standings.findIndex(
+                      (other) => other.score === p.score,
+                    ) + 1}
+                  </span>
+                  {p.nickname}
+                  {p.playerId === playerId ? ' (вы)' : ''}
+                  {p.solved && game.phase === 'playing'
+                    ? ` · угадал #${p.finishOrder ?? ''}`
+                    : ''}
+                  {game.phase === 'playing' && (
+                    <span className="mt-1 block text-xs font-semibold tabular-nums text-primary">
+                      {p.solved
+                        ? '✓ Готов'
+                        : p.wrong
+                          ? 'Неверный ответ · −4'
+                          : p.skipped
+                            ? 'Пропустил'
+                            : p.expired || (p.deadline ?? game.endsAt) <= now
+                              ? 'Время вышло'
+                              : `${Math.max(0, Math.ceil(((p.deadline ?? game.endsAt) - now) / 1000))} с · угадывает`}
+                    </span>
+                  )}
+                </span>
+                <m.strong
+                  key={p.score}
+                  initial={{ opacity: 0.5 }}
+                  animate={{ opacity: 1 }}
+                  className="text-xl tabular-nums text-primary"
+                >
+                  {p.score}
+                  <span className="ml-1 text-xs text-muted-foreground">
+                    оч.
+                  </span>
+                </m.strong>
+              </m.li>
+            ))}
+          </ol>
+        </Card>
+      )}
     </section>
   );
 }
@@ -585,7 +476,12 @@ function AnswerForm({
   const expired = now >= game.endsAt;
 
   useEffect(() => {
-    if (!solved && !personal?.solved && !expired) {
+    if (
+      !solved &&
+      !personal?.solved &&
+      !expired &&
+      window.matchMedia('(pointer: fine)').matches
+    ) {
       inputRef.current?.focus();
     }
   }, [game.roundId, solved, personal?.solved, expired]);
@@ -674,6 +570,39 @@ function AnswerForm({
       answer.mutate(title);
     }
   };
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (
+        game.answerMode !== 'choices' ||
+        e.repeat ||
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey ||
+        e.isComposing ||
+        !(e.key >= '1' && e.key <= '4') ||
+        solved ||
+        expired ||
+        game.personalWrong ||
+        answer.isPending ||
+        skip.isPending ||
+        !connected
+      )
+        return;
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input,textarea,select,[contenteditable=true]')
+      )
+        return;
+      const title = game.choices?.[Number(e.key) - 1];
+      if (title) {
+        e.preventDefault();
+        answer.mutate(title);
+      }
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [game, solved, expired, answer, skip.isPending, connected]);
   if (
     game.answerMode === 'choices' &&
     (game.personalWrong || answer.data?.status === 'incorrect')
@@ -974,316 +903,5 @@ function Poster({ url }: { url?: string }) {
     >
       ▶
     </span>
-  );
-}
-
-function FinishedGameScreen({
-  game,
-  playerId,
-  leave,
-  restart,
-  restarting,
-  isHost,
-  format,
-  onOpenLobby,
-}: {
-  game: GameSnapshot;
-  playerId: string;
-  leave: () => void;
-  restart?: () => void;
-  restarting?: boolean;
-  isHost?: boolean;
-  format?: 'party' | 'solo' | 'battle';
-  onOpenLobby?: () => void;
-}) {
-  const mine = game.standings.find((p) => p.playerId === playerId);
-  const myScore = mine?.score ?? 0;
-  const maxPossible = (game.totalRounds || 1) * 20;
-  const percentage = Math.round((myScore / maxPossible) * 100);
-
-  const rankTitle = 'Результат игры';
-  const rankSubtitle = `${myScore} из ${maxPossible} очков`;
-  const sorted = [...game.standings].sort((a, b) => b.score - a.score);
-  const myRank = sorted.findIndex((p) => p.playerId === playerId) + 1;
-
-  const [copied, setCopied] = useState(false);
-  const handleShare = async () => {
-    try {
-      const shareText = `Кадрово 🎬: набрал ${myScore} из ${maxPossible} очков (${percentage}%) в ${game.totalRounds} раундах! Сыграть: ${typeof window !== 'undefined' ? window.location.origin : ''}`;
-      await navigator.clipboard.writeText(shareText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-6">
-        <div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/20 px-3 py-1 text-xs font-bold text-primary">
-            <Sparkles className="size-3.5" /> ФИНАЛ МАТЧА
-          </span>
-          <h1 className="mt-2 text-3xl sm:text-4xl font-black tracking-tight text-white">
-            {format === 'party' && sorted.length > 1
-              ? myRank === 1
-                ? 'Вы победили'
-                : `Игра завершена · ${myRank} место`
-              : rankTitle}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{rankSubtitle}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={leave}
-            className="rounded-2xl border-border/70 bg-secondary text-white hover:bg-zinc-800"
-          >
-            <LogOut className="size-4 mr-2" />
-            Выйти
-          </Button>
-        </div>
-      </div>
-
-      {/* Main 2-Column Content Layout (Desktop) / 1-Column (Mobile) */}
-      <div className="grid gap-6 lg:grid-cols-12">
-        {/* Left Column: Player Score Card & Actions (7 cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="rounded-2xl border border-border/70 surface-panel bg-card p-6 sm:p-8 flex flex-col justify-between">
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">
-                  Итоговый счёт
-                </span>
-                <span className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-primary">
-                  {modeLabels[game.mode]} · {game.totalRounds} раундов
-                </span>
-              </div>
-
-              <div className="flex items-baseline gap-3">
-                <span className="text-7xl sm:text-8xl font-black tabular-nums text-primary tracking-tight">
-                  {myScore}
-                </span>
-                <span className="text-xl text-muted-foreground font-semibold">
-                  / {maxPossible} очков
-                </span>
-              </div>
-
-              {/* Accuracy progress bar */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs font-medium">
-                  <span className="text-muted-foreground">
-                    Результативность
-                  </span>
-                  <span className="text-primary font-bold">{percentage}%</span>
-                </div>
-                <div className="h-2.5 w-full rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-700"
-                    style={{
-                      width: `${Math.max(4, Math.min(100, percentage))}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Stats badges */}
-              <div className="grid grid-cols-3 gap-2 pt-2">
-                <div className="rounded-2xl border border-border/50 bg-secondary/60 p-3 text-center">
-                  <span className="text-xs text-muted-foreground block">
-                    Раундов
-                  </span>
-                  <span className="text-lg font-black text-white">
-                    {game.totalRounds}
-                  </span>
-                </div>
-                <div className="rounded-2xl border border-border/50 bg-secondary/60 p-3 text-center">
-                  <span className="text-xs text-muted-foreground block">
-                    Механика
-                  </span>
-                  <span className="text-sm font-bold text-white mt-0.5 block truncate">
-                    {modeLabels[game.mode]}
-                  </span>
-                </div>
-                <div className="rounded-2xl border border-border/50 bg-secondary/60 p-3 text-center">
-                  <span className="text-xs text-muted-foreground block">
-                    Ср. за фильм
-                  </span>
-                  <span className="text-lg font-black text-primary">
-                    {(myScore / (game.totalRounds || 1)).toFixed(1)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* CTA action buttons */}
-            <div className="pt-8 space-y-3">
-              {restart && (isHost || format === 'solo') ? (
-                <Button
-                  size="lg"
-                  onClick={restart}
-                  disabled={restarting}
-                  className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-black text-base shadow-sm hover:brightness-110 active:scale-[0.98] transition-all"
-                >
-                  {restarting ? (
-                    <span className="flex items-center gap-2">
-                      <span className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                      Запускаем…
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <RotateCcw className="size-5" />
-                      {format === 'solo' ? 'Играть ещё раз' : 'Сыграть ещё раз'}
-                    </span>
-                  )}
-                </Button>
-              ) : format === 'party' && !isHost ? (
-                <div className="rounded-2xl border border-border/60 bg-secondary/70 p-4 text-center">
-                  <p className="text-sm font-medium text-foreground">
-                    Ожидаем новую игру
-                  </p>
-                </div>
-              ) : null}
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleShare}
-                  className="h-12 rounded-2xl border-border/70 bg-secondary text-sm font-semibold hover:bg-zinc-800 text-white"
-                >
-                  <Share2 className="size-4 mr-2" />
-                  {copied ? '✓ Скопировано!' : 'Поделиться'}
-                </Button>
-
-                {onOpenLobby ? (
-                  <Button
-                    variant="outline"
-                    onClick={onOpenLobby}
-                    className="h-12 rounded-2xl border-border/70 bg-secondary text-sm font-semibold hover:bg-zinc-800 text-white"
-                  >
-                    <Settings2 className="size-4 mr-2" />
-                    Настройки
-                  </Button>
-                ) : (
-                  <Link
-                    href="/"
-                    className="inline-flex items-center justify-center h-12 rounded-2xl border border-border/70 bg-secondary text-sm font-semibold hover:bg-zinc-800 text-white"
-                  >
-                    В главное меню
-                  </Link>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Featured Movie & Leaderboard (5 cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* Last Movie Reveal Card */}
-          {game.answer && (
-            <div className="rounded-2xl border border-border/70 surface-panel bg-card p-6 space-y-4">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">
-                {game.totalRounds === 1
-                  ? 'Загаданный фильм'
-                  : 'Финальный фильм раунда'}
-              </p>
-              <div className="flex items-center gap-4 rounded-2xl border border-border/60 bg-secondary/60 p-4">
-                {game.answer.posterUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={game.answer.posterUrl}
-                    alt={game.answer.name}
-                    className="w-20 h-28 rounded-xl object-cover border border-border/60 shadow-lg shrink-0"
-                  />
-                ) : (
-                  <div className="w-20 h-28 rounded-xl bg-secondary flex items-center justify-center border border-border/60 shrink-0">
-                    <Film className="size-8 text-muted-foreground" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] font-bold text-primary uppercase">
-                    {categoryLabels[game.answer.category]}
-                  </span>
-                  <h3 className="mt-1 text-lg font-black text-white truncate">
-                    {game.answer.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {game.answer.year ?? '—'}
-                  </p>
-                  <p className="mt-2 text-xs font-semibold text-foreground">
-                    {mine?.wrong
-                      ? 'Неверный ответ · −4 очка'
-                      : mine?.solved
-                        ? `Угадано: +${mine.roundScore} очков`
-                        : 'Фильм не угадан'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Standings / Leaderboard */}
-          <div className="rounded-2xl border border-border/70 surface-panel bg-card p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">
-                {sorted.length > 1 ? 'Результаты игроков' : 'Участник игры'}
-              </p>
-              <span className="text-xs text-muted-foreground">
-                {sorted.length} чел.
-              </span>
-            </div>
-            <div className="space-y-2">
-              {sorted.map((p, idx) => {
-                const isMe = p.playerId === playerId;
-                const medals = ['🥇', '🥈', '🥉'];
-                const medal = medals[idx];
-                return (
-                  <div
-                    key={p.playerId}
-                    className={`flex items-center justify-between gap-3 rounded-2xl border p-3.5 transition-all ${
-                      idx === 0 && sorted.length > 1
-                        ? 'border-primary/50 bg-secondary ring-1 ring-primary/30'
-                        : isMe
-                          ? 'border-border/80 bg-secondary'
-                          : 'border-border/40 bg-secondary/40'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="flex size-7 items-center justify-center font-bold text-sm">
-                        {medal ?? (
-                          <span className="text-muted-foreground text-xs font-semibold">
-                            #{idx + 1}
-                          </span>
-                        )}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="font-bold text-sm text-white truncate flex items-center gap-1.5">
-                          {p.nickname}
-                          {isMe && (
-                            <span className="rounded-md bg-primary/20 px-1.5 py-0.2 text-[10px] font-bold text-primary">
-                              ВЫ
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <span className="text-base font-black tabular-nums text-white">
-                        {p.score}
-                      </span>
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        очков
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }

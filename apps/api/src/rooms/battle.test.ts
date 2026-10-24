@@ -12,7 +12,14 @@ describe('solo and random duels', () => {
     const [a, b] = rooms.createBattle('A', 'B');
     rooms.connect(a.code, a.token, 'a');
     rooms.connect(b.code, b.token, 'b');
-    expect(deck).toHaveBeenLastCalledWith('movies', 'frames', 'catalog', 'all');
+    expect(deck).toHaveBeenLastCalledWith(
+      'movies',
+      'frames',
+      'catalog',
+      'all',
+      3,
+      expect.any(Object),
+    );
     const solo = rooms.create({
       nickname: 'C',
       format: 'solo',
@@ -28,6 +35,8 @@ describe('solo and random duels', () => {
       'frames',
       'catalog',
       'nineties',
+      3,
+      expect.any(Object),
     );
   });
   it('allows only the party host to change settings, clears readiness and locks during play', () => {

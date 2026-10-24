@@ -1,3 +1,5 @@
+import { ExperienceService } from './experience.service';
+import type { MatchState } from '../game/match';
 import { RatingService, type BattleOutcome } from './rating.service';
 import {
   Injectable,
@@ -21,6 +23,7 @@ import { DemoCatalog, type Question } from '../game/catalog';
 import { ContentCatalog, type GameCatalog } from '../content/catalog';
 import { Match } from '../game/match';
 type Player = {
+  subject?: string;
   id: string;
   nickname: string;
   ready: boolean;
@@ -28,6 +31,17 @@ type Player = {
   sockets: Set<string>;
 };
 type Room = {
+  dailyDay?: string;
+  practiceDay?: string;
+  savedDaily?: MatchState;
+  challengeId?: string;
+  challengeLinks?: Map<string, Promise<string>>;
+  sharedAnswer?: boolean;
+  tastes?: NonNullable<CreateRoom['tastes']>;
+  tasteVotes?: Record<string, NonNullable<CreateRoom['tastes']>>;
+  rematchVotes?: Set<string>;
+  exposed?: Set<string>;
+  progressRevision?: number;
   name: string;
   answerMode: 'search' | 'choices';
   visibility: 'public' | 'private';
@@ -65,6 +79,9 @@ export class RoomsService {
     @Inject(ContentCatalog)
     private readonly catalog: GameCatalog = new DemoCatalog(),
     @Optional() @Inject(RatingService) private readonly ratings?: RatingService,
+    @Optional()
+    @Inject(ExperienceService)
+    private readonly experience?: ExperienceService,
   ) {}
   tick() {
     this.prune();
@@ -75,7 +92,10 @@ export class RoomsService {
         r.revision++;
         changed.push(r.code);
       }
-    for (const r of this.rooms.values()) this.queueRating(r);
+    for (const r of this.rooms.values()) {
+      this.queueRating(r);
+      this.recordProgress(r);
+    }
     void this.flushRatings();
     return changed;
   }
@@ -133,6 +153,8 @@ export class RoomsService {
     );
     if (input.name) r.name = input.name;
     if (input.answerMode) r.answerMode = input.answerMode;
+    if (input.sharedAnswer !== undefined) r.sharedAnswer = input.sharedAnswer;
+    if (input.tastes) r.tastes = input.tastes;
     r.collection = input.collection ?? r.collection;
     r.category = input.category;
     r.mode = input.mode;
@@ -149,6 +171,10 @@ export class RoomsService {
       throw new ConflictException('Запустить партию может только организатор.');
     if (r.format === 'battle')
       throw new ConflictException('Дуэль запускается автоматически.');
+    if ((r.dailyDay || r.challengeId) && r.match)
+      throw new ConflictException(
+        'Результат дня уже сохранён. Повтор доступен как тренировка.',
+      );
     if (r.match?.active) throw new ConflictException('Партия уже идёт.');
     const connectedPlayers = r.players.filter((p) => p.sockets.size > 0);
     if (connectedPlayers.length < (r.format === 'solo' ? 1 : 2))
@@ -165,6 +191,8 @@ export class RoomsService {
       throw new ConflictException(
         'Нужны хотя бы двое игроков. Все должны быть в сети и готовы.',
       );
+    const votes = Object.values(r.tasteVotes ?? {}).flat();
+    if (votes.length) r.tastes = votes;
     r.match = new Match(
       r.dailyDeck ??
         this.catalog.deck(
@@ -172,7 +200,13 @@ export class RoomsService {
           r.mode,
           r.source,
           r.collection,
-          ...(r.totalRounds && r.totalRounds !== 3 ? [r.totalRounds] : []),
+          r.totalRounds,
+          {
+            seen: this.experience?.seen(
+              r.players.flatMap((p) => (p.subject ? [p.subject] : [])),
+            ),
+            tastes: r.tastes,
+          },
         ),
       r.mode,
       r.players,
@@ -181,8 +215,15 @@ export class RoomsService {
       r.format === 'solo' ? 1000 : 3000,
       r.answerMode,
       this.catalog.options?.(r.category, r.source) ?? [],
+      !!r.sharedAnswer,
     );
+    r.totalRounds = r.match.snapshot(Date.now()).totalRounds;
+    if (r.savedDaily) {
+      r.match.restore(r.savedDaily, r.players[0]!.id);
+      r.savedDaily = undefined;
+    }
     for (const p of r.players) p.ready = false;
+    this.experience?.metric('match_started');
     r.revision++;
   }
   answer(code: string, token: string, command: AnswerCommand) {
@@ -191,23 +232,41 @@ export class RoomsService {
     if (!r.match) throw new ConflictException('Партия ещё не началась.');
     if (!this.catalog.has(command.titleId, r.category, r.source))
       throw new ConflictException('Выберите название из поиска.');
+    if (r.sharedAnswer && id !== r.hostId)
+      throw new ConflictException('Общий ответ подтверждает ведущий.');
     const result = r.match.answer(id, command, Date.now());
+    r.exposed ??= new Set();
+    const commandKey = 'answer:' + command.commandId;
+    if (
+      !r.exposed.has(commandKey) &&
+      (result.status === 'correct' || result.status === 'incorrect')
+    ) {
+      r.exposed.add(commandKey);
+      this.experience?.metric('answer_' + result.status);
+    }
     r.revision++;
+    this.recordProgress(r);
     return result;
   }
   skip(code: string, token: string, roundId: string) {
     const id = this.authenticate(code, token),
       r = this.room(code);
     if (!r.match) throw new ConflictException('Партия ещё не началась.');
+    if (r.sharedAnswer && id !== r.hostId)
+      throw new ConflictException('Подсказки и пропуск выбирает ведущий.');
     r.match.skip(id, roundId, Date.now());
     r.revision++;
+    this.recordProgress(r);
   }
   select(code: string, token: string, roundId: string, stage: number) {
     const id = this.authenticate(code, token),
       r = this.room(code);
     if (!r.match) throw new ConflictException('Партия ещё не началась.');
+    if (r.sharedAnswer && id !== r.hostId)
+      throw new ConflictException('Подсказки выбирает ведущий.');
     r.match.select(id, roundId, stage, Date.now());
     r.revision++;
+    this.recordProgress(r);
   }
   personal(code: string, token: string) {
     const id = this.authenticate(code, token);
@@ -226,8 +285,11 @@ export class RoomsService {
         (room.format === 'battle' &&
           !room.match &&
           (room.battleDeadline ?? Infinity) <= Date.now())
-      )
+      ) {
+        for (const p of room.players)
+          if (p.subject) this.experience?.release(p.subject);
         this.rooms.delete(code);
+      }
   }
   private room(code: string) {
     this.prune();
@@ -238,7 +300,7 @@ export class RoomsService {
       );
     return room;
   }
-  private add(room: Room, nickname: string): RoomSession {
+  private add(room: Room, nickname: string, subject?: string): RoomSession {
     if (room.match?.active)
       throw new ConflictException(
         'Партия уже идёт. Войти можно после её окончания.',
@@ -262,11 +324,13 @@ export class RoomsService {
     const token = randomBytes(32).toString('hex');
     const player = {
       id: randomUUID(),
+      subject,
       nickname,
       ready: false,
       tokenHash: digest(token),
       sockets: new Set<string>(),
     };
+    if (subject) this.experience?.retain(subject);
     room.players.push(player);
     room.revision++;
     return { code: room.code, token, playerId: player.id };
@@ -325,26 +389,31 @@ export class RoomsService {
         category: r.category,
       }));
   }
-  createQuick(players: { nickname: string }[]) {
+  createQuick(players: { nickname: string; subject?: string }[]) {
     this.catalog.validate?.('movies', 'frames', 'catalog');
-    const first = this.create({
-      nickname: players[0]!.nickname,
-      category: 'movies',
-      mode: 'frames',
-      source: 'catalog',
-      visibility: 'public',
-    });
+    const first = this.create(
+      {
+        nickname: players[0]!.nickname,
+        category: 'movies',
+        mode: 'frames',
+        source: 'catalog',
+        visibility: 'public',
+      },
+      players[0]?.subject,
+    );
     const r = this.room(first.code);
     const sessions = [first];
     for (const [i, p] of players.slice(1).entries())
-      sessions.push(this.add(r, `${p.nickname.slice(0, 18)} · ${i + 2}`));
+      sessions.push(
+        this.add(r, `${p.nickname.slice(0, 18)} · ${i + 2}`, p.subject),
+      );
     r.format = 'battle';
     r.quick = true;
     r.quickCapacity = players.length;
     r.battleDeadline = Date.now() + 60000;
     return sessions;
   }
-  create(input: CreateRoom) {
+  create(input: CreateRoom, subject?: string) {
     this.prune();
     if (this.rooms.size >= 200)
       throw new ServiceUnavailableException(
@@ -356,6 +425,10 @@ export class RoomsService {
     } while (this.rooms.has(code));
     const room: Room = {
       code,
+      sharedAnswer: input.sharedAnswer,
+      tastes: input.tastes
+        ? [...new Set(input.tastes)].filter((v) => v !== 'all')
+        : undefined,
       name: input.name ?? `Комната ${input.nickname}`,
       answerMode: input.answerMode ?? 'search',
       visibility: input.visibility ?? 'private',
@@ -371,9 +444,10 @@ export class RoomsService {
       players: [],
       expiresAt: Date.now() + 2 * 60 * 60 * 1000,
     };
-    const session = this.add(room, input.nickname);
+    const session = this.add(room, input.nickname, subject);
     room.hostId = session.playerId;
     this.rooms.set(code, room);
+    this.experience?.metric('room_created');
     return session;
   }
   createBattle(
@@ -402,6 +476,12 @@ export class RoomsService {
     );
     r.format = 'battle';
     r.accounts = accounts;
+    if (accounts) {
+      r.players[0]!.subject = 'account:' + accounts[0];
+      r.players[1]!.subject = 'account:' + accounts[1];
+      for (const p of r.players)
+        if (p.subject) this.experience?.retain(p.subject);
+    }
     r.battlePlayers = [a.playerId, b.playerId];
     r.battleDeadline = Date.now() + 60_000;
     return [a, b];
@@ -415,25 +495,278 @@ export class RoomsService {
     )
       return false;
     if (!r.match && (r.battleDeadline ?? 0) < Date.now()) {
+      for (const p of r.players)
+        if (p.subject) this.experience?.release(p.subject);
       this.rooms.delete(r.code);
       return false;
     }
     return true;
   }
-  createDaily(question: Question, nickname: string) {
-    const session = this.create({
-      format: 'solo',
-      nickname,
-      category: 'movies',
-      mode: 'frames',
-      source: 'catalog',
-      roundSeconds: 45,
-    });
-    this.room(session.code).dailyDeck = [question];
+  createDaily(
+    question: Question,
+    nickname: string,
+    subject?: string,
+    day?: string,
+    training = false,
+  ) {
+    const progress =
+      subject && day && !training
+        ? this.experience?.get(subject).daily[day]
+        : undefined;
+    if (progress?.session && this.rooms.has(progress.session.code)) {
+      const player = this.room(progress.session.code).players.find(
+        (p) => p.id === progress.session!.playerId,
+      );
+      if (player && player.subject !== subject) {
+        if (player.subject) this.experience?.release(player.subject);
+        if (subject) this.experience?.retain(subject);
+        player.subject = subject;
+      }
+      return progress.session;
+    }
+    const session = this.create(
+      {
+        format: 'solo',
+        nickname,
+        category: 'movies',
+        mode: 'frames',
+        source: 'catalog',
+        roundSeconds: 45,
+      },
+      subject,
+    );
+    const room = this.room(session.code);
+    room.dailyDeck = [question];
+    if (training) room.practiceDay = day;
+    if (!training) {
+      room.dailyDay = day;
+      room.savedDaily = progress?.state;
+    }
+    if (subject && day && !training && this.experience) {
+      this.experience.get(subject).daily[day] = { ...progress, session };
+      this.experience.save(subject);
+    }
     return session;
   }
-  join(code: string, nickname: string) {
-    return this.add(this.room(code), nickname);
+  private recordProgress(r: Room) {
+    if (!r.match || !this.experience) return;
+    const game = r.match.snapshot(Date.now());
+    r.exposed ??= new Set();
+    if (
+      game.phase === 'finished' &&
+      !r.exposed.has('finished:' + game.matchId)
+    ) {
+      r.exposed.add('finished:' + game.matchId);
+      this.experience.metric('match_finished');
+      if (r.sharedAnswer) this.experience.metric('cooperative_finished');
+      if (r.tastes?.length) this.experience.metric('taste_finished');
+    }
+    for (const p of r.players)
+      if (p.subject) {
+        const key = p.id + ':' + game.roundId;
+        if (p.sockets.size && !r.exposed.has(key)) {
+          r.exposed.add(key);
+          this.experience.expose(
+            p.subject,
+            r.match.titleIds[game.roundNumber - 1]!,
+          );
+        }
+        if (
+          (r.dailyDay || r.challengeId) &&
+          r.progressRevision !== r.revision
+        ) {
+          const personal = r.match.snapshot(Date.now(), p.id);
+          const owner = this.experience.get(p.subject);
+          const bucket = r.dailyDay ? owner.daily : (owner.challenges ??= {});
+          const progressKey = r.dailyDay ?? r.challengeId!;
+          const progress = bucket[progressKey] ?? {};
+          progress.state = r.match.checkpoint();
+          progress.updatedAt = Date.now();
+          if (game.phase === 'finished') {
+            progress.score = personal.standings[0]?.score ?? 0;
+            progress.solved = personal.history?.[0]?.solved ?? false;
+          }
+          bucket[progressKey] = progress;
+          this.experience.save(p.subject);
+        }
+        if (
+          r.challengeId &&
+          game.phase === 'finished' &&
+          !r.exposed.has('result:' + p.id)
+        ) {
+          r.exposed.add('result:' + p.id);
+          const personal = r.match.snapshot(Date.now(), p.id);
+          void this.experience
+            .recordChallenge(
+              r.challengeId,
+              p.subject,
+              p.nickname,
+              personal.standings.find((v) => v.playerId === p.id)?.score ?? 0,
+              personal.history?.filter((v) => v.solved).length ?? 0,
+            )
+            .catch(() => {
+              r.exposed!.delete('result:' + p.id);
+            });
+        }
+      }
+    r.progressRevision = r.revision;
+  }
+  async challenge(code: string, token: string, subject: string) {
+    const id = this.authenticate(code, token),
+      r = this.room(code);
+    if (r.match?.active || !r.match)
+      throw new ConflictException('Вызов доступен после окончания партии.');
+    if (!this.experience) throw new ServiceUnavailableException();
+    const game = r.match.snapshot(Date.now(), id);
+    const key = r.match.id + ':' + id;
+    r.challengeLinks ??= new Map();
+    const existing = r.challengeLinks.get(key);
+    if (existing) return { id: await existing };
+    const pending = this.experience.createChallenge({
+      titleIds: r.match.titleIds,
+      mode: r.mode,
+      category: r.category,
+      source: r.source,
+      answerMode: r.answerMode,
+      seconds: r.roundSeconds,
+      expiresAt: Date.now() + 7 * 86400000,
+      results: [
+        {
+          subject,
+          nickname: r.players.find((p) => p.id === id)!.nickname,
+          score: game.standings.find((p) => p.playerId === id)!.score,
+          solved: game.history?.filter((p) => p.solved).length ?? 0,
+        },
+      ],
+    });
+    r.challengeLinks.set(key, pending);
+    try {
+      return { id: await pending };
+    } catch (error) {
+      r.challengeLinks.delete(key);
+      throw error;
+    }
+  }
+  async joinChallenge(challengeId: string, subject: string, nickname: string) {
+    if (!this.experience || !this.catalog.byIds)
+      throw new ServiceUnavailableException();
+    const c = await this.experience.challenge(challengeId);
+    if (this.experience.hasResult(c, subject))
+      throw new ConflictException('Первый результат уже записан.');
+    if (c.results.length >= 500)
+      throw new ConflictException(
+        'В вызове уже 500 результатов. Создайте новый.',
+      );
+    const owner = this.experience.get(subject);
+    owner.challenges ??= {};
+    const progress = owner.challenges[challengeId];
+    if (progress?.session && this.rooms.has(progress.session.code)) {
+      const player = this.room(progress.session.code).players.find(
+        (p) => p.id === progress.session!.playerId,
+      );
+      if (player && player.subject !== subject) {
+        if (player.subject) this.experience?.release(player.subject);
+        if (subject) this.experience?.retain(subject);
+        player.subject = subject;
+      }
+      return progress.session;
+    }
+    const questions = this.catalog.byIds(c.titleIds, c.source);
+    const session = this.create(
+      {
+        nickname,
+        format: 'solo',
+        mode: c.mode,
+        category: c.category,
+        source: c.source,
+        answerMode: c.answerMode,
+        roundSeconds: c.seconds as 45,
+      },
+      subject,
+    );
+    const room = this.room(session.code);
+    room.dailyDeck = questions;
+    room.challengeId = challengeId;
+    room.savedDaily = progress?.state;
+    owner.challenges[challengeId] = { ...progress, session };
+    this.experience.save(subject);
+    return session;
+  }
+  tastes(
+    code: string,
+    token: string,
+    tastes: NonNullable<CreateRoom['tastes']>,
+  ) {
+    const id = this.authenticate(code, token),
+      r = this.room(code);
+    if (r.format !== 'party' || r.match?.active)
+      throw new ConflictException('Вкус выбирается в лобби.');
+    r.tasteVotes ??= {};
+    r.tasteVotes[id] = [...new Set(tastes)].filter((v) => v !== 'all');
+    r.revision++;
+  }
+  rematch(code: string, token: string) {
+    const id = this.authenticate(code, token),
+      r = this.room(code);
+    if (!r.match || r.match.active || r.dailyDay || r.challengeId)
+      throw new ConflictException('Реванш сейчас недоступен.');
+    r.rematchVotes ??= new Set();
+    r.rematchVotes.add(id);
+    r.revision++;
+    const active = r.players.filter((p) => p.sockets.size);
+    if (active.length < 2 || !active.every((p) => r.rematchVotes!.has(p.id)))
+      return;
+    this.queueRating(r);
+    for (const p of r.players)
+      if (!active.includes(p) && p.subject) this.experience?.release(p.subject);
+    r.players = active;
+    if (!active.some((p) => p.id === r.hostId)) r.hostId = active[0]!.id;
+    if (r.tasteVotes)
+      r.tasteVotes = Object.fromEntries(
+        Object.entries(r.tasteVotes).filter(([id]) =>
+          active.some((p) => p.id === id),
+        ),
+      );
+    r.ratingQueued = false;
+    r.rematchVotes.clear();
+    r.match = new Match(
+      this.catalog.deck(
+        r.category,
+        r.mode,
+        r.source,
+        r.collection,
+        r.totalRounds,
+        {
+          seen: this.experience?.seen(
+            r.players.flatMap((p) => (p.subject ? [p.subject] : [])),
+          ),
+          tastes: r.tastes,
+        },
+      ),
+      r.mode,
+      active,
+      Date.now(),
+      r.roundSeconds * 1000,
+      3000,
+      r.answerMode,
+      this.catalog.options?.(r.category, r.source) ?? [],
+      !!r.sharedAnswer,
+    );
+  }
+  report(code: string, token: string, reason: string) {
+    const id = this.authenticate(code, token),
+      r = this.room(code);
+    if (!r.match) throw new ConflictException('Игра не началась.');
+    const game = r.match.snapshot(Date.now(), id);
+    return {
+      titleId: r.match.titleIds[game.roundNumber - 1]!,
+      stage: game.stage,
+      mode: game.mode,
+      reason,
+    };
+  }
+  join(code: string, nickname: string, subject?: string) {
+    return this.add(this.room(code), nickname, subject);
   }
   authenticate(code: string, token: string) {
     const room = this.room(code);
@@ -446,8 +779,16 @@ export class RoomsService {
   }
   snapshot(code: string, token?: string): RoomSnapshot {
     const r = this.room(code);
+    this.recordProgress(r);
     return {
       name: r.name,
+      sharedAnswer: r.sharedAnswer,
+      tastes: r.tastes,
+      tasteVotes: r.tasteVotes,
+      dailyDay: r.dailyDay,
+      practiceDay: r.practiceDay,
+      challengeId: r.challengeId,
+      rematchVotes: [...(r.rematchVotes ?? [])],
       answerMode: r.answerMode,
       code: r.code,
       format: r.format,
@@ -503,7 +844,19 @@ export class RoomsService {
       r.players.every((p) => p.sockets.size)
     )
       r.match = new Match(
-        this.catalog.deck(r.category, r.mode, r.source, r.collection),
+        this.catalog.deck(
+          r.category,
+          r.mode,
+          r.source,
+          r.collection,
+          r.totalRounds,
+          {
+            seen: this.experience?.seen(
+              r.players.flatMap((p) => (p.subject ? [p.subject] : [])),
+            ),
+            tastes: r.tastes,
+          },
+        ),
         r.mode,
         r.players,
         Date.now(),
@@ -511,6 +864,7 @@ export class RoomsService {
         3000,
         r.answerMode,
         this.catalog.options?.(r.category, r.source) ?? [],
+        !!r.sharedAnswer,
       );
     if (r.format === 'solo' && !r.match) this.start(code, token);
     r.revision++;
@@ -539,6 +893,8 @@ export class RoomsService {
     this.queueRating(r, id);
     void this.flushRatings();
     r.match?.leave(id, Date.now());
+    const leaving = r.players.find((p) => p.id === id);
+    if (leaving?.subject) this.experience?.release(leaving.subject);
     r.players = r.players.filter((p) => p.id !== id);
     r.revision++;
     if (!r.players.length) this.rooms.delete(code);
@@ -560,6 +916,7 @@ export class RoomsService {
     const index = r.players.findIndex((p) => p.id === targetPlayerId);
     if (index === -1) return undefined;
     const [removed] = r.players.splice(index, 1);
+    if (removed?.subject) this.experience?.release(removed.subject);
     r.revision++;
     return removed;
   }

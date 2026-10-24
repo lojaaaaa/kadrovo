@@ -26,6 +26,26 @@ export class PlayerRound {
     if (now >= this.startedAt && !this.solved)
       this.endsAt = Math.min(this.endsAt, now);
   }
+  checkpoint() {
+    return {
+      nextAllowedAt: this.nextAllowedAt,
+      solved: this.solved,
+      stage: this.stage,
+      opened: this.opened,
+      skipped: this.skipped,
+      endsAt: this.endsAt,
+      results: [...this.results],
+    };
+  }
+  restore(state: ReturnType<PlayerRound['checkpoint']>) {
+    this.nextAllowedAt = state.nextAllowedAt;
+    this.solved = state.solved;
+    this.stage = state.stage;
+    this.opened = state.opened;
+    this.skipped = state.skipped;
+    this.endsAt = state.endsAt;
+    this.results = new Map(state.results);
+  }
   get deadline() {
     return this.endsAt;
   }

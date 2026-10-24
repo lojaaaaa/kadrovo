@@ -1,4 +1,5 @@
 'use client';
+import { ResumeGame } from './resume-game';
 import Link from 'next/link';
 import { ArrowRight, Clapperboard, Users, Settings2 } from 'lucide-react';
 import { DailyFilm } from './daily-film';
@@ -36,6 +37,8 @@ function FilmWindows({ online = false }: { online?: boolean }) {
 export function HomeDashboard() {
   return (
     <main className="home-screen">
+      <ResumeGame />
+
       <header className="home-heading home-enter">
         <p className="home-eyebrow">Угадывайте кино</p>
         <h1>Выберите игру</h1>

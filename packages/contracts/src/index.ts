@@ -82,6 +82,8 @@ export const createRoomSchema = z
   .object({
     name: z.string().trim().min(1).max(60).optional(),
     answerMode: z.enum(['search', 'choices']).optional(),
+    sharedAnswer: z.boolean().optional(),
+    tastes: z.array(collectionSchema).max(3).optional(),
     visibility: z.enum(['public', 'private']).optional(),
     collection: collectionSchema.optional(),
     nickname: z.string().trim().min(1).max(24),
@@ -104,6 +106,8 @@ export const createRoomSchema = z
 export const roomSettingsSchema = createRoomSchema.pick({
   name: true,
   answerMode: true,
+  sharedAnswer: true,
+  tastes: true,
   collection: true,
   category: true,
   mode: true,
@@ -149,6 +153,13 @@ export const kickPlayerSchema = z
   .strict();
 export type RoomSnapshot = {
   name?: string;
+  sharedAnswer?: boolean;
+  tastes?: CollectionId[];
+  tasteVotes?: Record<string, CollectionId[]>;
+  rematchVotes?: string[];
+  dailyDay?: string;
+  practiceDay?: string;
+  challengeId?: string;
   answerMode?: 'search' | 'choices';
   collection?: CollectionId;
   format: 'party' | 'solo' | 'battle';
@@ -185,6 +196,7 @@ export const searchSchema = z
   .object({ query: z.string().trim().min(2).max(80) })
   .strict();
 export type TitleOption = {
+  genres?: string[];
   posterUrl?: string;
   id: string;
   name: string;
@@ -196,7 +208,16 @@ export type GamePersonal = {
   solved: boolean;
   nextAllowedAt: number;
 };
+export type RoundReview = {
+  title: TitleOption;
+  score: number;
+  solved: boolean;
+  hints: number;
+};
 export type GameSnapshot = {
+  history?: RoundReview[];
+  sharedAnswer?: boolean;
+  captainId?: string;
   answerMode?: 'search' | 'choices';
   choices?: TitleOption[];
   matchId: string;

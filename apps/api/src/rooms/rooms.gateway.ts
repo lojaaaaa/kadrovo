@@ -11,6 +11,7 @@ import {
 import { z } from 'zod';
 import { Server, Socket } from 'socket.io';
 import {
+  collectionSchema,
   readySchema,
   kickPlayerSchema,
   roomSettingsSchema,
@@ -72,6 +73,42 @@ export class RoomsGateway
           error instanceof Error
             ? error.message
             : 'Не удалось сохранить настройки.',
+      };
+    }
+  }
+  @SubscribeMessage('room:tastes') tastes(
+    @ConnectedSocket() socket: Socket,
+    @MessageBody() body: unknown,
+  ): RoomAck {
+    try {
+      const a = this.auth(socket);
+      const { tastes } = z
+        .object({ tastes: z.array(collectionSchema).max(3) })
+        .strict()
+        .parse(body);
+      this.rooms.tastes(a.code, a.token, tastes);
+      this.publish(a.code);
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error ? error.message : 'Не удалось сохранить.',
+      };
+    }
+  }
+  @SubscribeMessage('game:rematch') rematch(
+    @ConnectedSocket() socket: Socket,
+  ): RoomAck {
+    try {
+      const a = this.auth(socket);
+      this.rooms.rematch(a.code, a.token);
+      this.publish(a.code);
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : 'Реванш недоступен.',
       };
     }
   }

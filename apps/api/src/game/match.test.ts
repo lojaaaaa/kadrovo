@@ -362,3 +362,82 @@ it('keeps repeated search answers available without a choice penalty', () => {
     score: 20,
   });
 });
+
+describe('replay-safe progress and review', () => {
+  it('never reveals future films and keeps every finished round in personal review', () => {
+    const m = new Match(deck, 'frames', [players[0]!], 1000, 1000, 100);
+    expect(m.snapshot(1000, 'a').history).toBeUndefined();
+    m.answer('a', command(m), 1100);
+    m.advance(1200);
+    m.skip('a', m.snapshot(1200).roundId, 1250);
+    m.advance(1350);
+    m.skip('a', m.snapshot(1350).roundId, 1400);
+    m.advance(1500);
+    expect(
+      m
+        .snapshot(1500, 'a')
+        .history?.map((r) => [r.title.id, r.solved, r.score]),
+    ).toEqual([
+      ['title-0', true, 20],
+      ['title-1', false, 0],
+      ['title-2', false, 0],
+    ]);
+  });
+  it('restores opened hints and shortened deadline after restart without a free attempt', () => {
+    const original = new Match(deck, 'frames', [players[0]!], 1000);
+    original.select('a', original.snapshot(1000).roundId, 1, 2000);
+    const restored = new Match(
+      deck,
+      'frames',
+      [{ id: 'new', nickname: 'Аня' }],
+      3000,
+    );
+    restored.restore(JSON.parse(JSON.stringify(original.checkpoint())), 'new');
+    expect(restored.snapshot(3000, 'new')).toMatchObject({
+      stage: 1,
+      unlockedStage: 1,
+      endsAt: 41000,
+      possibleScore: 16,
+    });
+    restored.select('new', restored.snapshot(3000).roundId, 0, 3500);
+    expect(restored.snapshot(3500, 'new').endsAt).toBe(41000);
+  });
+  it('gives the same cooperative result and synchronizes paid hints', () => {
+    const m = new Match(
+      deck,
+      'frames',
+      players,
+      1000,
+      45000,
+      1000,
+      'search',
+      [],
+      true,
+    );
+    m.select('a', m.snapshot(1000).roundId, 1, 1500);
+    expect(m.snapshot(1500, 'b')).toMatchObject({ stage: 1, endsAt: 41000 });
+    m.answer('a', command(m), 2000);
+    expect(m.snapshot(2000).standings.map((p) => p.score)).toEqual([16, 16]);
+    expect(m.snapshot(2000).phase).toBe('reveal');
+  });
+  it('prefers contemporary distractors while keeping exactly four unique options', () => {
+    const pool = [
+      ...deck.map((q) => q.title),
+      { ...deck[0]!.title, id: 'old', name: 'Старое', year: 1920 },
+      { ...deck[0]!.title, id: 'near', name: 'Близкое', year: 2004 },
+    ];
+    const m = new Match(
+      deck,
+      'frames',
+      players,
+      1000,
+      45000,
+      1000,
+      'choices',
+      pool,
+    );
+    const options = m.snapshot(1000).choices!;
+    expect(options).toHaveLength(4);
+    expect(options.some((t) => t.id === 'old')).toBe(false);
+  });
+});

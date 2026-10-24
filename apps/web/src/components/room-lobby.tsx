@@ -13,6 +13,7 @@ import {
   type RoomAck,
   type GamePersonal,
 } from '@filmless/contracts';
+import { CompanyTastes } from './company-tastes';
 import { PartyLobby } from './party-lobby';
 import { GameBoard } from './game-board';
 import { Button } from '@/components/ui/button';
@@ -88,6 +89,8 @@ export function RoomLobby({ code }: { code: string }) {
       store.setState({ error: message, session: null, room: null });
       try {
         localStorage.removeItem(sessionKey(code));
+        if (localStorage.getItem('kadrovo:active-room') === code)
+          localStorage.removeItem('kadrovo:active-room');
       } catch {
         /* Storage may be disabled; in-memory session is cleared. */
       }
@@ -173,20 +176,15 @@ export function RoomLobby({ code }: { code: string }) {
       );
   }
   function leave() {
-    if (!socketRef.current) return;
-    setPending(true);
-    socketRef.current
-      .timeout(5000)
-      .emit('room:leave', (err: Error | null, ack: RoomAck) => {
-        setPending(false);
-        if (err || !ack?.ok) {
-          store.setState({ error: 'Не удалось выйти. Попробуйте ещё раз.' });
-          return;
-        }
-        localStorage.removeItem(sessionKey(code));
-        socketRef.current?.disconnect();
-        router.push('/');
-      });
+    socketRef.current?.emit('room:leave');
+    try {
+      localStorage.removeItem(sessionKey(code));
+      localStorage.removeItem('kadrovo:active-room');
+    } catch {
+      /* Private browsing. */
+    }
+    socketRef.current?.disconnect();
+    router.push('/');
   }
   return (
     <main
@@ -252,6 +250,25 @@ export function RoomLobby({ code }: { code: string }) {
               {/* 1. Active or Finished Game View */}
               {room.game && (!isFinished || !viewLobby) && (
                 <GameBoard
+                  room={room}
+                  session={session}
+                  rematch={() => {
+                    socketRef.current
+                      ?.timeout(5000)
+                      .emit(
+                        'game:rematch',
+                        (err: Error | null, ack: RoomAck) => {
+                          if (err || !ack?.ok)
+                            store.setState({
+                              error: err
+                                ? 'Нет связи.'
+                                : ack.ok
+                                  ? null
+                                  : ack.message,
+                            });
+                        },
+                      );
+                  }}
                   leave={leave}
                   restart={() => start.mutate(room.format === 'party')}
                   restarting={start.isPending}
@@ -290,6 +307,11 @@ export function RoomLobby({ code }: { code: string }) {
                         </Button>
                       </div>
                     )}
+                    <CompanyTastes
+                      room={room}
+                      session={session}
+                      getSocket={() => socketRef.current}
+                    />
                     <PartyLobby
                       room={room}
                       session={session}

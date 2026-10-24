@@ -11,6 +11,7 @@ const movieSchema = z.object({
   isSeries: z.boolean().nullish(),
   enName: z.string().trim().max(1000).nullish(),
   alternativeName: z.string().trim().max(1000).nullish(),
+  genres: z.array(z.object({ name: z.string() })).optional(),
   names: z.array(z.object({ name: z.string().nullish() })).nullish(),
   poster: z.object({ url: z.string().nullish() }).nullish(),
 });
@@ -29,6 +30,7 @@ const imagesSchema = z.object({
   next: z.string().nullable().optional(),
 });
 export type ImportedTitle = {
+  genres?: string[];
   provider: 'poiskkino' | 'kinopoisk-unofficial';
   externalId: string;
   nameRu: string;
@@ -118,6 +120,7 @@ export function mapPoiskKino(movie: unknown, pages: unknown[]): ImportedTitle {
     .filter((v): v is string => typeof v === 'string' && !!normalizeTitle(v))
     .slice(0, 100);
   return {
+    genres: m.genres?.map((g) => g.name).slice(0, 12),
     provider: 'poiskkino',
     externalId: String(m.id),
     nameRu: m.name,

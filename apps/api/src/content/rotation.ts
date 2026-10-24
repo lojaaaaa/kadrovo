@@ -19,7 +19,11 @@ export class CatalogRotation {
   snapshot() {
     return { sequence: this.sequence, seen: [...this.seen] };
   }
-  pick<T extends { title: { id: string } }>(items: T[], count: number): T[] {
+  pick<T extends { title: { id: string } }>(
+    items: T[],
+    count: number,
+    compare?: (a: T, b: T) => number,
+  ): T[] {
     if (!items.length || !Number.isInteger(count) || count < 1 || count > 1000)
       throw new Error('Invalid deck size');
     const shuffled = [...items];
@@ -30,6 +34,7 @@ export class CatalogRotation {
     // Randomize only films with equal recency. Unseen titles always come first.
     shuffled.sort(
       (a, b) =>
+        (compare?.(a, b) ?? 0) ||
         (this.seen.get(a.title.id) ?? -1) - (this.seen.get(b.title.id) ?? -1),
     );
     const result: T[] = [];

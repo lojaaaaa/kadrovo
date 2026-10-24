@@ -106,6 +106,19 @@ export class ContentSync implements OnModuleInit, OnModuleDestroy {
       else delete state.cursors[cursorKey];
       state.index = (state.index + 1) % 3;
       await save();
+      const health = {
+        type,
+        at: Date.now(),
+        published: result.published,
+        existing: result.existing,
+        unavailable: result.unavailable,
+        deferredFrames: result.deferredFrames,
+      };
+      await this.store.db.contentState.upsert({
+        where: { key: 'catalog-health' },
+        create: { key: 'catalog-health', value: health },
+        update: { value: health },
+      });
       this.logger.log(JSON.stringify({ type, ...result, next: undefined }));
     } catch (error) {
       if (state && markBlocked(state, fingerprint, error))

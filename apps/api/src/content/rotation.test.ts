@@ -35,3 +35,17 @@ it('shares history across overlapping collections and safely supports long match
   expect(r.pick(items.slice(0, 3), 7)).toHaveLength(7);
   expect(() => r.restore({ sequence: 1, seen: [['x', 2]] })).toThrow();
 });
+
+it('prioritizes unseen personal titles without marking unused films as seen', () => {
+  const rotation = new CatalogRotation();
+  const items = Array.from({ length: 6 }, (_, i) => ({
+    title: { id: String(i) },
+  }));
+  const chosen = rotation.pick(
+    items,
+    3,
+    (a, b) => Number(Number(a.title.id) < 3) - Number(Number(b.title.id) < 3),
+  );
+  expect(chosen.map((t) => t.title.id).sort()).toEqual(['3', '4', '5']);
+  expect(rotation.snapshot().seen).toHaveLength(3);
+});

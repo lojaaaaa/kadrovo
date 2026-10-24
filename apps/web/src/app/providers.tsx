@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { MotionSystem, ScreenTransition } from '@/components/motion-system';
 import { BackNavigation } from '@/components/back-navigation';
+import { QueueResume } from '@/components/queue-resume';
 import { SiteHeader } from '@/components/site-header';
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(
@@ -15,6 +16,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={client}>
       <MotionSystem>
         <SiteHeader />
+        <QueueResume />
         <ScreenTransition>
           <BackNavigation />
           {children}

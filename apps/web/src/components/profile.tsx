@@ -1,4 +1,5 @@
 'use client';
+import { ExperiencePanel } from './experience-panel';
 import { SectionSkeleton } from './section-skeleton';
 import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
@@ -222,6 +223,7 @@ export function Profile() {
           </section>
         </div>
       )}
+      <ExperiencePanel />
       {(account.error || save.error || logout.error) && (
         <p role="alert" className="mt-5 text-destructive">
           {account.error?.message ||

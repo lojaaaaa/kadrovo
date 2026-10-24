@@ -131,6 +131,7 @@ export class UnofficialClient {
       ['мультфильм', 'аниме'].includes(g.genre),
     );
     return {
+      genres: title.genres.map((g) => g.genre).slice(0, 12),
       provider: this.provider,
       externalId: id,
       nameRu: name,

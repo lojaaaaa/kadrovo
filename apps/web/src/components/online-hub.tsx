@@ -1,8 +1,9 @@
 'use client';
+import { markQueue } from './queue-resume';
 import { SectionSkeleton } from './section-skeleton';
 import Link from 'next/link';
 import { m } from './motion-system';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LoaderCircle, Swords, Users, ArrowRight } from 'lucide-react';
@@ -59,7 +60,8 @@ export function OnlineHub() {
         kind === 'cancel' ? 'DELETE' : 'POST',
         kind === 'cancel' ? undefined : { kind },
       ),
-    onSuccess: () => {
+    onSuccess: (_, kind) => {
+      markQueue(kind !== 'cancel');
       void client.invalidateQueries({ queryKey: ['quick'] });
     },
   });
@@ -71,6 +73,16 @@ export function OnlineHub() {
     }
   }, [session, router]);
   const waiting = queue.data?.status === 'waiting';
+  const [waitSeconds, setWaitSeconds] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(
+      () =>
+        setWaitSeconds(waiting ? Math.floor((Date.now() - started) / 1000) : 0),
+      1000,
+    );
+    return () => clearInterval(timer);
+  }, [waiting]);
   return (
     <main className="screen screen--online-hub mx-auto max-w-6xl px-4 py-8">
       <h1 className="mb-6 text-3xl font-bold">Онлайн</h1>
@@ -89,6 +101,9 @@ export function OnlineHub() {
               <h2 className="text-2xl font-bold">
                 {session ? 'Игра найдена' : 'Ищем игроков'}
               </h2>
+              <p className="text-sm text-muted-foreground">
+                Ожидание {waitSeconds} с
+              </p>
               <p className="text-muted-foreground">
                 {queue.data?.waiting ?? 0} / {queue.data?.required ?? 2}
               </p>
@@ -99,6 +114,11 @@ export function OnlineHub() {
               >
                 Отменить поиск
               </Button>
+              {waitSeconds >= 20 && (
+                <Link href="/play/solo" className="text-sm text-primary">
+                  Тренироваться, пока идёт поиск →
+                </Link>
+              )}
             </m.div>
           ) : account.isPending ||
             (!!account.data?.account && queue.isPending) ? (

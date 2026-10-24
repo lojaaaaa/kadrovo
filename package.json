@@ -25,7 +25,8 @@
     "test:game": "node scripts/smoke-game.mjs",
     "catalog": "pnpm --filter @filmless/api catalog",
     "test:content": "pnpm --filter @filmless/api exec tsx src/content/integration.ts",
-    "test:auth": "pnpm --filter @filmless/api exec tsx src/auth/integration.ts"
+    "test:auth": "pnpm --filter @filmless/api exec tsx src/auth/integration.ts",
+    "test:product": "node scripts/smoke-product.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

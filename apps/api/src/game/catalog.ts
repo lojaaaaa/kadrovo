@@ -194,6 +194,13 @@ export class DemoCatalog implements OnModuleInit {
     }
     return result;
   }
+  byIds(ids: string[]) {
+    return ids.map((id) => {
+      const q = this.questions.find((q) => q.title.id === id);
+      if (!q) throw new Error('Фильм недоступен.');
+      return q;
+    });
+  }
   options(category: CreateRoom['category']) {
     return titles.filter((t) => t.category === category);
   }
