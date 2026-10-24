@@ -1,5 +1,8 @@
+import { dailyWindow, isArchiveDay } from '@filmless/contracts';
 import {
   BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
   Catch,
   UseFilters,
   ArgumentsHost,
@@ -53,6 +56,32 @@ export class ExperienceController {
   ) {
     return this.experience.summary(await this.actor(req, res));
   }
+  @Post('resume') async resume(
+    @Body() body: unknown,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.actor(req, res, true);
+    const input = z
+      .object({
+        code: z.string().regex(/^[A-F0-9]{8}$/),
+        token: z.string().min(32).max(128),
+      })
+      .strict()
+      .parse(body);
+    try {
+      this.rooms.authenticate(input.code, input.token);
+      const room = this.rooms.snapshot(input.code, input.token);
+      return { available: true, phase: room.game?.phase ?? 'lobby' };
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof UnauthorizedException
+      )
+        return { available: false };
+      throw error;
+    }
+  }
   @Post('watchlist') async watch(
     @Body() body: unknown,
     @Req() req: Request,
@@ -70,7 +99,8 @@ export class ExperienceController {
     const title = (['movies', 'series', 'animation'] as const)
       .flatMap((c) => this.catalog.options(c, 'catalog'))
       .find((t) => t.id === input.titleId);
-    if (!title) throw new BadRequestException('Фильм недоступен.');
+    if (!title && !input.remove)
+      throw new BadRequestException('Фильм недоступен.');
     data.watchlist = data.watchlist.filter((t) => t.id !== input.titleId);
     data.removedWatchlist = (data.removedWatchlist ?? []).filter(
       (id) => id !== input.titleId,
@@ -82,7 +112,7 @@ export class ExperienceController {
     if (!input.remove) {
       if (data.watchlist.length >= 200)
         throw new BadRequestException('В списке уже 200 фильмов.');
-      data.watchlist.unshift(title);
+      data.watchlist.unshift(title!);
     }
     this.experience.save(subject);
     return { ok: true };
@@ -161,14 +191,9 @@ export class ExperienceController {
     @Res({ passthrough: true }) res: Response,
   ) {
     await this.actor(req, res);
-    const today = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Moscow',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
+    const today = dailyWindow().day;
     return this.store.db.dailyChallenge.findMany({
-      where: { day: { lte: today } },
+      where: { day: { lt: today } },
       select: { day: true },
       orderBy: { day: 'desc' },
       take: 60,
@@ -180,22 +205,15 @@ export class ExperienceController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const subject = await this.actor(req, res, true);
-    if (
-      !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
-      day >
-        new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'Europe/Moscow',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-        }).format(new Date())
-    )
+    if (!isArchiveDay(day))
       throw new BadRequestException('Архив ещё недоступен.');
     const record = await this.store.db.dailyChallenge.findUnique({
       where: { day },
     });
     if (!record) throw new BadRequestException('Задание не найдено.');
-    const q = this.catalog.byIds([record.titleId], 'catalog')[0]!;
+    const q = this.catalog.byIds([record.titleId], 'catalog')[0];
+    if (!q)
+      throw new BadRequestException('Фильм этого задания временно недоступен.');
     return this.rooms.createDaily(q, 'Киноман', subject, day, true);
   }
 }

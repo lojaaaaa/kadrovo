@@ -1879,3 +1879,27 @@ input[type='range'] {
     height: clamp(300px, 50dvh, 590px);
   }
 }
+
+.result-share-preview {
+  z-index: 60;
+  width: min(360px, calc(100vw - 48px));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 16px 48px #0006;
+}
+.result-share-preview textarea {
+  width: 100%;
+  min-width: 0;
+  resize: none;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--background);
+  padding: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}

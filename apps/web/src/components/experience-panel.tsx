@@ -7,6 +7,12 @@ import { api } from '@/lib/account';
 import { saveSession } from '@/lib/rooms';
 import { Button } from './ui/button';
 export type ExperienceSummary = {
+  currentDaily: {
+    day: string;
+    nextAt: number;
+    serverTime: number;
+    status: 'new' | 'in-progress' | 'completed';
+  };
   streak: number;
   seen: number;
   watchlist: TitleOption[];
@@ -85,34 +91,38 @@ export function ExperiencePanel() {
               Ежедневные задания · {data.data?.daily.length ?? 0}
             </summary>
             <div className="mt-3 space-y-2">
-              {(archiveDays.data ?? data.data?.daily ?? []).map((entry) => {
-                const d = data.data?.daily.find((v) => v.day === entry.day) ?? {
-                  day: entry.day,
-                  score: undefined,
-                  solved: false,
-                };
-                return (
-                  <div
-                    key={d.day}
-                    className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-sm"
-                  >
-                    <span>
-                      {d.day} ·{' '}
-                      {d.score === undefined
-                        ? 'Ещё не сыграно'
-                        : `${d.solved ? 'Угадано' : 'Не угадано'} · ${d.score} очков`}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => archive.mutate(d.day)}
-                      disabled={archive.isPending}
+              {(archiveDays.data ?? data.data?.daily ?? [])
+                .filter((d) => d.day < (data.data?.currentDaily.day ?? ''))
+                .map((entry) => {
+                  const d = data.data?.daily.find(
+                    (v) => v.day === entry.day,
+                  ) ?? {
+                    day: entry.day,
+                    score: undefined,
+                    solved: false,
+                  };
+                  return (
+                    <div
+                      key={d.day}
+                      className="flex flex-wrap items-center justify-between gap-2 border-b py-2 text-sm"
                     >
-                      Тренировка
-                    </Button>
-                  </div>
-                );
-              })}
+                      <span>
+                        {d.day} ·{' '}
+                        {d.score === undefined
+                          ? 'Ещё не сыграно'
+                          : `${d.solved ? 'Угадано' : 'Не угадано'} · ${d.score} очков`}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => archive.mutate(d.day)}
+                        disabled={archive.isPending}
+                      >
+                        Тренировка
+                      </Button>
+                    </div>
+                  );
+                })}
             </div>
           </details>
         </>

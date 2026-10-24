@@ -1,5 +1,8 @@
 'use client';
 /* eslint-disable @next/next/no-img-element -- Authorized game rasters and private media use the same origin cache. */
+import { ResultShare } from './result-share';
+import { m } from './motion-system';
+import { useReducedMotion } from 'motion/react';
 import { ConnectionQuiz } from './connection-quiz';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -8,7 +11,6 @@ import {
   ArrowRight,
   BookmarkPlus,
   Check,
-  Copy,
   RotateCcw,
   Users,
 } from 'lucide-react';
@@ -41,10 +43,11 @@ export function GameReview({
   rematch: () => void;
   onOpenLobby?: () => void;
 }) {
+  const reduced = useReducedMotion();
   const history = game.history ?? [];
   const score = game.standings.find((p) => p.playerId === playerId)?.score ?? 0;
   const [saved, setSaved] = useState<string[]>([]);
-  const [copied, setCopied] = useState(false);
+  const [challengeCopied, setChallengeCopied] = useState(false);
   const watch = useMutation({
     mutationFn: (title: TitleOption) =>
       api('experience/watchlist', 'POST', { titleId: title.id }),
@@ -61,21 +64,14 @@ export function GameReview({
         await navigator.clipboard.writeText(
           `${location.origin}/challenge/${value.id}`,
         );
-        setCopied(true);
+        setChallengeCopied(true);
       } catch {
         // The visible link remains usable when clipboard permission is unavailable.
-        setCopied(false);
+        setChallengeCopied(false);
       }
     },
   });
   const solved = history.filter((r) => r.solved).length;
-  const share = async () => {
-    const day = room.dailyDay ? ` · ${room.dailyDay}` : '';
-    await navigator.clipboard.writeText(
-      `Кадрово${day}\n${history.map((r) => (r.solved ? '🟩' : '⬛')).join('')}\n${solved}/${history.length} · ${score} очков\n${location.origin}`,
-    );
-    setCopied(true);
-  };
   return (
     <section className="review-screen space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -120,13 +116,7 @@ export function GameReview({
               · {room.rematchVotes?.length ?? 0}/{room.players.length}
             </Button>
           ))}
-        <Button
-          variant="outline"
-          onClick={() => void share().catch(() => setCopied(false))}
-        >
-          <Copy />
-          {copied ? 'Скопировано' : 'Поделиться результатом'}
-        </Button>
+        <ResultShare history={history} score={score} day={room.dailyDay} />
         {!game.demo && !room.dailyDay && (
           <Button
             variant="outline"
@@ -147,7 +137,8 @@ export function GameReview({
       {challenge.data && (
         <div className="rounded-xl border p-3">
           <p className="text-sm mb-2">
-            Одинаковые фильмы и правила. Сохраняется первый результат.
+            {challengeCopied ? 'Ссылка скопирована. ' : ''}Одинаковые фильмы и
+            правила. Сохраняется первый результат.
           </p>
           <Link
             className="text-primary break-all"
@@ -186,7 +177,16 @@ export function GameReview({
       <ConnectionQuiz key={game.matchId} history={history} />
       <div className="review-films">
         {history.map((r, i) => (
-          <article key={i} className="review-film">
+          <m.article
+            key={i}
+            className="review-film"
+            initial={{ opacity: reduced ? 1 : 0, y: reduced ? 0 : 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              duration: reduced ? 0 : 0.25,
+              delay: reduced ? 0 : Math.min(i, 5) * 0.045,
+            }}
+          >
             {r.title.posterUrl && (
               <img src={r.title.posterUrl} alt="" loading="lazy" />
             )}
@@ -214,7 +214,7 @@ export function GameReview({
                 {saved.includes(r.title.id) ? <Check /> : <BookmarkPlus />}
               </Button>
             )}
-          </article>
+          </m.article>
         ))}
       </div>
       {room.dailyDay && (

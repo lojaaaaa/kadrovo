@@ -10,7 +10,11 @@ import { randomBytes, createHash } from 'node:crypto';
 import { CatalogStore } from '../content/store';
 import { AuthService } from '../auth/auth.service';
 import { cookie, setCookie } from '../auth/security';
-import type { TitleOption, RoomSession } from '@filmless/contracts';
+import {
+  dailyWindow,
+  type TitleOption,
+  type RoomSession,
+} from '@filmless/contracts';
 import type { MatchState } from '../game/match';
 export type DailyProgress = {
   updatedAt?: number;
@@ -222,12 +226,8 @@ export class ExperienceService implements OnModuleDestroy {
       .filter(([, v]) => v.score !== undefined)
       .sort((a, b) => b[0].localeCompare(a[0]));
     let streak = 0;
-    const today = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Europe/Moscow',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date());
+    const window = dailyWindow();
+    const today = window.day;
     const shift = (day: string, n: number) =>
       new Date(Date.parse(day + 'T12:00:00Z') + n * 86400000)
         .toISOString()
@@ -238,6 +238,15 @@ export class ExperienceService implements OnModuleDestroy {
       day = shift(day, -1);
     }
     return {
+      currentDaily: {
+        ...window,
+        status:
+          data.daily[today]?.score !== undefined
+            ? 'completed'
+            : data.daily[today]?.state || data.daily[today]?.session
+              ? 'in-progress'
+              : 'new',
+      },
       streak,
       watchlist: data.watchlist,
       daily: days.map(([day, v]) => ({

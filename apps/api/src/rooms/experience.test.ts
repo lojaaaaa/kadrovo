@@ -91,3 +91,28 @@ it('does not evict the history of an active room when many guests visit', async 
   service.release(active);
   await service.onModuleDestroy();
 });
+it('reports daily state without leaking the saved session and rolls over at Moscow midnight', async () => {
+  const { store, auth, req, res } = setup();
+  vi.useFakeTimers();
+  try {
+    vi.setSystemTime(new Date('2026-10-24T20:59:59Z'));
+    const service = new ExperienceService(store, auth);
+    const id = await service.identity(req, res);
+    expect(service.summary(id).currentDaily.status).toBe('new');
+    service.get(id).daily['2026-10-24'] = {
+      session: { code: 'AAAAAAAA', token: 'secret', playerId: 'p' },
+    };
+    expect(service.summary(id).currentDaily.status).toBe('in-progress');
+    service.get(id).daily['2026-10-24']!.score = 0;
+    expect(service.summary(id).currentDaily.status).toBe('completed');
+    expect(JSON.stringify(service.summary(id))).not.toContain('secret');
+    vi.setSystemTime(new Date('2026-10-24T21:00:00Z'));
+    expect(service.summary(id).currentDaily).toMatchObject({
+      day: '2026-10-25',
+      status: 'new',
+    });
+    await service.onModuleDestroy();
+  } finally {
+    vi.useRealTimers();
+  }
+});

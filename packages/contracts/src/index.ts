@@ -285,3 +285,5 @@ export type ContentAvailability = {
   }[];
   ready: boolean;
 };
+
+export { dailyWindow, isArchiveDay } from './daily';
