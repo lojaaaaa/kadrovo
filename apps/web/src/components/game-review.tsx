@@ -57,10 +57,15 @@ export function GameReview({
         token: session.token,
       }),
     onSuccess: async (value) => {
-      await navigator.clipboard.writeText(
-        `${location.origin}/challenge/${value.id}`,
-      );
-      setCopied(true);
+      try {
+        await navigator.clipboard.writeText(
+          `${location.origin}/challenge/${value.id}`,
+        );
+        setCopied(true);
+      } catch {
+        // The visible link remains usable when clipboard permission is unavailable.
+        setCopied(false);
+      }
     },
   });
   const solved = history.filter((r) => r.solved).length;
