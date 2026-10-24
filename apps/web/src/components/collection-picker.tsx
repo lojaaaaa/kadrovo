@@ -85,7 +85,7 @@ export function CollectionPicker({
             return (
               <div
                 key={list.id}
-                className="rounded-2xl border border-border/50 bg-card p-4 space-y-3"
+                className="rounded-2xl border border-border/50 surface-panel bg-card p-4 space-y-3"
               >
                 <div className="flex items-center justify-between">
                   <Skeleton className="h-8 w-16" />
@@ -114,7 +114,7 @@ export function CollectionPicker({
               className={`group relative flex flex-col justify-between rounded-2xl border p-4 text-left transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-primary ${
                 isSelected
                   ? 'border-primary bg-secondary/80 ring-1 ring-primary/50 shadow-md'
-                  : 'border-border/60 bg-card hover:border-zinc-700 hover:bg-secondary/40'
+                  : 'border-border/60 surface-panel bg-card hover:border-zinc-700 hover:bg-secondary/40'
               } ${!isAvailable ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}`}
             >
               <div className="flex w-full items-start justify-between gap-2">
@@ -123,7 +123,7 @@ export function CollectionPicker({
                   <span>{meta.badge}</span>
                 </span>
                 {isSelected ? (
-                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-white shadow-sm">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                     <Check className="size-3 stroke-[3]" />
                   </span>
                 ) : (

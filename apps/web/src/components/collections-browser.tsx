@@ -71,10 +71,10 @@ export function CollectionsBrowser() {
   });
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8 md:px-8">
+    <main className="screen screen--collections-browser mx-auto max-w-6xl px-4 py-8 md:px-8">
       <div className="flex flex-col gap-2">
         <p className="text-xs uppercase tracking-[.25em] text-primary font-bold">
-          Репертуар Filmless
+          Репертуар Кадрово
         </p>
         <h1 className="text-4xl sm:text-5xl font-black tracking-tight text-white">
           Кино на ваш вкус.
@@ -127,7 +127,7 @@ export function CollectionsBrowser() {
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="rounded-3xl border border-border/50 bg-card p-6 md:p-8 space-y-4"
+              className="rounded-2xl border border-border/50 surface-panel bg-card p-5 md:p-6 space-y-4"
             >
               <div className="flex justify-between items-center">
                 <Skeleton className="h-6 w-28 rounded-lg" />
@@ -166,7 +166,7 @@ export function CollectionsBrowser() {
             return (
               <article
                 key={c.id}
-                className="group relative rounded-3xl border border-border/70 bg-card p-6 md:p-8 transition-all duration-200 hover:border-zinc-700 flex flex-col justify-between"
+                className="collection-tile group relative rounded-2xl border border-border/70 surface-panel bg-card p-5 md:p-6 transition-all duration-200 hover:border-zinc-700 flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between">
@@ -215,7 +215,7 @@ export function CollectionsBrowser() {
                   <div className="flex items-center gap-2.5">
                     <Link
                       href={`/play/solo?${params}`}
-                      className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:brightness-110 transition active:scale-95"
+                      className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow-sm hover:brightness-110 transition active:scale-95"
                     >
                       <Play className="size-3.5 fill-current" />
                       Играть соло

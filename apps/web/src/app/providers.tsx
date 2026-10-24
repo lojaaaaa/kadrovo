@@ -1,6 +1,8 @@
 'use client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
+import { MotionSystem, ScreenTransition } from '@/components/motion-system';
+import { BackNavigation } from '@/components/back-navigation';
 import { SiteHeader } from '@/components/site-header';
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(
@@ -11,8 +13,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
   return (
     <QueryClientProvider client={client}>
-      <SiteHeader />
-      {children}
+      <MotionSystem>
+        <SiteHeader />
+        <ScreenTransition>
+          <BackNavigation />
+          {children}
+        </ScreenTransition>
+      </MotionSystem>
     </QueryClientProvider>
   );
 }

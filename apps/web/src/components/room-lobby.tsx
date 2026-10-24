@@ -190,7 +190,7 @@ export function RoomLobby({ code }: { code: string }) {
   }
   return (
     <main
-      className={`mx-auto max-w-7xl px-3 sm:px-5 ${active ? 'game-room py-2' : 'py-6'}`}
+      className={`screen screen--room mx-auto max-w-7xl px-3 sm:px-5 ${active ? 'game-room py-2' : 'py-6'}`}
     >
       <h1
         className={
@@ -200,15 +200,15 @@ export function RoomLobby({ code }: { code: string }) {
         }
       >
         {room?.format === 'solo'
-          ? 'Тренировка без спешки'
+          ? 'Одиночная игра'
           : room?.format === 'battle'
             ? 'Дуэль 1 на 1'
-            : 'Все свои. Почти в сборе.'}
+            : 'Лобби'}
       </h1>
       {!loaded ? (
         <div className="mt-8 space-y-4">
           <Skeleton className="h-10 w-72 rounded-xl" />
-          <div className="rounded-3xl border border-border/50 bg-card/40 p-6 space-y-4">
+          <div className="rounded-2xl border border-border/50 bg-card/40 p-6 space-y-4">
             <Skeleton className="h-8 w-48 rounded-lg" />
             <Skeleton className="h-12 w-full rounded-xl" />
             <Skeleton className="h-48 w-full rounded-2xl" />
@@ -276,7 +276,7 @@ export function RoomLobby({ code }: { code: string }) {
                 room.format === 'party' && (
                   <div className="space-y-4">
                     {isFinished && (
-                      <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-card p-4">
+                      <div className="flex items-center justify-between rounded-2xl border border-border/70 surface-panel bg-card p-4">
                         <p className="text-sm font-medium text-white">
                           Вы находитесь в настройках лобби
                         </p>
@@ -324,7 +324,7 @@ export function RoomLobby({ code }: { code: string }) {
                     {room.hostId === session.playerId && (
                       <Button
                         size="lg"
-                        className="rounded-2xl bg-primary text-white font-bold h-13 px-7 shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95"
+                        className="rounded-2xl bg-primary text-primary-foreground font-bold h-13 px-7 shadow-sm hover:brightness-110 active:scale-95"
                         onClick={() => start.mutate()}
                         disabled={!allReady || !connected || start.isPending}
                       >

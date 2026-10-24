@@ -12,7 +12,7 @@ export function JoinRoomForm() {
   const [error, setError] = useState(false);
   return (
     <form
-      className="rounded-3xl border border-border/70 bg-card p-6"
+      className="rounded-2xl border border-border/70 surface-panel bg-card p-6"
       onSubmit={(e) => {
         e.preventDefault();
         const code = parseRoomCode(value);

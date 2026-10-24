@@ -80,6 +80,8 @@ export const timeControlPresets = [
 ] as const;
 export const createRoomSchema = z
   .object({
+    name: z.string().trim().min(1).max(60).optional(),
+    answerMode: z.enum(['search', 'choices']).optional(),
     visibility: z.enum(['public', 'private']).optional(),
     collection: collectionSchema.optional(),
     nickname: z.string().trim().min(1).max(24),
@@ -100,6 +102,8 @@ export const createRoomSchema = z
   })
   .strict();
 export const roomSettingsSchema = createRoomSchema.pick({
+  name: true,
+  answerMode: true,
   collection: true,
   category: true,
   mode: true,
@@ -144,6 +148,8 @@ export const kickPlayerSchema = z
   .object({ playerId: z.string().uuid() })
   .strict();
 export type RoomSnapshot = {
+  name?: string;
+  answerMode?: 'search' | 'choices';
   collection?: CollectionId;
   format: 'party' | 'solo' | 'battle';
   roundSeconds: number;
@@ -191,6 +197,8 @@ export type GamePersonal = {
   nextAllowedAt: number;
 };
 export type GameSnapshot = {
+  answerMode?: 'search' | 'choices';
+  choices?: TitleOption[];
   matchId: string;
   roundId: string;
   phase: 'playing' | 'reveal' | 'finished';
@@ -202,6 +210,7 @@ export type GameSnapshot = {
   possibleScore?: number;
   personalExpired?: boolean;
   personalSkipped?: boolean;
+  personalWrong?: boolean;
   roundDurationMs?: number;
   startedAt: number;
   endsAt: number;
@@ -219,6 +228,7 @@ export type GameSnapshot = {
     deadline?: number;
     expired?: boolean;
     skipped?: boolean;
+    wrong?: boolean;
     finishOrder?: number;
   }[];
 };

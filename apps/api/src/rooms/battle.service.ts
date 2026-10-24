@@ -9,7 +9,10 @@ import { RoomsService } from './rooms.service';
 type Entry = { nickname: string; touched: number; session?: RoomSession };
 @Injectable()
 export class BattleService {
-  private quick = new Map<string, Entry & { kind: 'duel' | 'group' }>();
+  private quick = new Map<
+    string,
+    Entry & { kind: 'duel' | 'group'; queuedAt?: number }
+  >();
   quickStatus(id: string) {
     for (const [key, e] of this.quick)
       if (
@@ -17,6 +20,24 @@ export class BattleService {
         (e.session && !this.rooms.battleAvailable(e.session))
       )
         this.quick.delete(key);
+    const group = [...this.quick.values()].filter(
+      (e) => e.kind === 'group' && !e.session,
+    );
+    if (
+      group.length >= 2 &&
+      (group.length >= 8 ||
+        Math.min(...group.map((e) => e.queuedAt ?? Date.now())) + 8000 <=
+          Date.now())
+    ) {
+      const batch = group.slice(0, 8);
+      const sessions = this.rooms.createQuick(
+        batch.map((e) => ({ nickname: e.nickname })),
+      );
+      batch.forEach((e, i) => {
+        e.session = sessions[i];
+        e.touched = Date.now();
+      });
+    }
     const entry = this.quick.get(id);
     if (!entry) return { status: 'idle' as const };
     entry.touched = Date.now();
@@ -28,7 +49,7 @@ export class BattleService {
           waiting: [...this.quick.values()].filter(
             (e) => e.kind === entry.kind && !e.session,
           ).length,
-          required: entry.kind === 'duel' ? 2 : 4,
+          required: entry.kind === 'duel' ? 2 : 8,
         };
   }
   quickJoin(account: { id: string; nickname: string }, kind: 'duel' | 'group') {
@@ -36,7 +57,16 @@ export class BattleService {
     if (this.quick.has(account.id)) return this.quickStatus(account.id);
     if (this.quick.size >= 400)
       throw new ServiceUnavailableException('Очередь заполнена.');
-    const needed = kind === 'duel' ? 2 : 4;
+    if (kind === 'group') {
+      this.quick.set(account.id, {
+        kind,
+        nickname: account.nickname,
+        touched: Date.now(),
+        queuedAt: Date.now(),
+      });
+      return this.quickStatus(account.id);
+    }
+    const needed = 2;
     const peers = [...this.quick.entries()]
       .filter(([, e]) => e.kind === kind && !e.session)
       .slice(0, needed - 1);

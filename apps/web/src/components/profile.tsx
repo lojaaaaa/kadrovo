@@ -1,4 +1,5 @@
 'use client';
+import { SectionSkeleton } from './section-skeleton';
 import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -87,20 +88,17 @@ export function Profile() {
     },
   });
   return (
-    <main className="mx-auto max-w-3xl px-5 py-12">
-      <Link href="/" className="font-bold text-primary">
-        ← Кадрово
-      </Link>
-      <h1 className="mt-8 text-4xl font-black">Профиль и настройки</h1>
+    <main className="screen screen--profile mx-auto max-w-5xl px-5 py-6">
+      <h1 className="mt-4 text-4xl font-black">Профиль и настройки</h1>
       {account.isPending ? (
-        <p className="mt-8">Загружаем профиль…</p>
+        <SectionSkeleton kind="profile" />
       ) : !account.data?.account ? (
-        <Link href="/account" className="mt-8 block text-primary">
+        <Link href="/account" className="mt-4 block text-primary">
           Войти в аккаунт →
         </Link>
       ) : (
-        <div className="mt-8 space-y-5">
-          <section className="rounded-3xl border bg-card p-7">
+        <div className="profile-panels mt-4 grid gap-4 lg:grid-cols-2">
+          <section className="rounded-2xl border surface-panel bg-card p-5">
             <div className="flex flex-wrap items-center gap-5">
               <Avatar
                 src={account.data.account.avatarUrl}
@@ -174,7 +172,7 @@ export function Profile() {
               )}
             </form>
           </section>
-          <section className="space-y-5 rounded-3xl border bg-card p-7">
+          <section className="space-y-4 rounded-2xl border surface-panel bg-card p-5">
             <h2 className="text-xl font-bold">Звук в игре</h2>
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="sound-enabled">Звуковые эффекты</Label>
@@ -210,7 +208,7 @@ export function Profile() {
               Настройки звука сохраняются в этом браузере.
             </p>
           </section>
-          <section className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border bg-card p-7">
+          <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border surface-panel bg-card p-5">
             <Link href="/account" className="text-primary">
               Способы входа и восстановление пароля →
             </Link>

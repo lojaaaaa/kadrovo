@@ -1,10 +1,13 @@
 'use client';
+import { roundClock } from '@/lib/round-clock';
+import { Skeleton } from './ui/skeleton';
+import { HelpTip } from './ui/help-tip';
+import { m } from './motion-system';
+import { AnimatePresence } from 'motion/react';
 import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  ZoomIn,
-  ZoomOut,
   Film,
   Sparkles,
   RotateCcw,
@@ -58,8 +61,9 @@ export function GameBoard({
   format?: 'party' | 'solo' | 'battle';
   onOpenLobby?: () => void;
 }) {
+  const [loadedImage, setLoadedImage] = useState<string | null>(null);
+  const [failedImage, setFailedImage] = useState<string | null>(null);
   const [clock, setClock] = useState({ anchor: receivedAt, elapsed: 0 });
-  const [zoomed, setZoomed] = useState(false);
   useEffect(() => {
     const update = () =>
       setClock({
@@ -121,6 +125,13 @@ export function GameBoard({
   });
   const unlocked = game.unlockedStage ?? 0;
   const mine = game.standings.find((p) => p.playerId === playerId);
+  const clockDisplay = roundClock({
+    phase: game.phase,
+    seconds: remaining,
+    solved: mine?.solved,
+    skipped: game.personalSkipped || mine?.skipped,
+    wrong: game.personalWrong,
+  });
   const { mutate: navigate, isPending: navigating } = navigation;
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -204,11 +215,11 @@ export function GameBoard({
 
   return (
     <section
-      className={`game-board ${game.mode === 'spotlight' ? 'game-spotlight' : ''} rounded-2xl border border-border/70 bg-card p-3 sm:p-4 game-viewport`}
+      className={`game-board ${game.mode === 'spotlight' ? 'game-spotlight' : ''} rounded-2xl border border-border/70 surface-panel bg-card p-3 sm:p-4 game-viewport`}
       aria-label="Партия"
     >
-      <div className="flex items-center justify-between gap-4">
-        <div>
+      <div className="game-topbar flex items-center justify-between gap-4">
+        <div className="min-w-0">
           <p className="text-sm text-muted-foreground">
             Раунд {game.roundNumber} из {game.totalRounds}
           </p>
@@ -216,53 +227,81 @@ export function GameBoard({
             {modeLabels[game.mode]}
           </h2>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="game-topbar-actions flex shrink-0 items-center gap-3">
           <Button
+            aria-label="Выйти из комнаты"
+            title="Выйти из комнаты"
             variant="outline"
             onClick={leave}
             className="h-11 border-border/70 text-muted-foreground hover:text-white"
           >
             <LogOut className="size-4" />
-            <span>Выйти</span>
+            <span className="hidden sm:inline">Выйти</span>
           </Button>
           <p
-            className={`rounded-2xl border-2 border-current/20 px-5 py-3 text-4xl sm:text-5xl font-black tabular-nums ${
-              remaining <= 5 && game.phase === 'playing'
+            className={`game-timer rounded-2xl border-2 border-current/20 px-5 py-3 text-4xl sm:text-5xl font-black tabular-nums ${
+              clockDisplay.urgent
                 ? 'bg-destructive/20 text-destructive'
                 : 'bg-secondary text-white'
             }`}
-            aria-label="Осталось секунд"
+            aria-label={`${clockDisplay.value} ${clockDisplay.label}`}
           >
-            {game.phase === 'playing' && mine?.solved
-              ? '✓'
-              : game.phase === 'playing' && remaining === 0
-                ? '…'
-                : remaining}
-            <span className="ml-1 text-sm text-muted-foreground font-normal">
-              {game.phase === 'playing' && mine?.solved
-                ? 'угадано'
-                : game.phase === 'playing' && remaining === 0
-                  ? 'ждём игроков'
-                  : 'с'}
-            </span>
+            <span className="game-timer-value">{clockDisplay.value}</span>
+            <span className="game-timer-label">{clockDisplay.label}</span>
           </p>
         </div>
       </div>
       <div className="gameplay-layout">
         <div className="game-image-group">
-          <div
-            className={`game-image relative overflow-hidden rounded-xl border bg-black/60 transition-transform duration-200 ${
-              zoomed ? 'scale-110 z-20 shadow-2xl' : ''
-            }`}
-          >
+          <div className="game-image frame-stage relative rounded-xl border bg-black/60">
+            <AnimatePresence initial={false}>
+              {loadedImage && failedImage !== game.image && (
+                <m.div
+                  key={loadedImage}
+                  className="frame-glow"
+                  aria-hidden="true"
+                  style={{
+                    backgroundImage: `url(${JSON.stringify(loadedImage)})`,
+                  }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.3 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.55, ease: 'easeInOut' }}
+                />
+              )}
+            </AnimatePresence>
+            {loadedImage !== game.image && failedImage !== game.image && (
+              <Skeleton
+                className="absolute inset-0 z-[2] size-full"
+                aria-label="Загрузка кадра"
+                role="status"
+              />
+            )}
+            {failedImage === game.image && (
+              <p
+                className="absolute inset-0 z-[2] grid place-items-center text-sm text-muted-foreground"
+                role="status"
+              >
+                Не удалось загрузить изображение
+              </p>
+            )}
             {/* Server sends only the current raster image; future hints are never preloaded. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={game.image}
+              onError={() => setFailedImage(game.image)}
+              onLoad={(event) => {
+                setLoadedImage(game.image);
+                const image = event.currentTarget;
+                image.classList.remove('game-frame-ready');
+                // Restart only after a new image loads, never on timer updates.
+                void image.offsetWidth;
+                image.classList.add('game-frame-ready');
+              }}
               alt={`Визуальная подсказка ${game.stage + 1} из 5`}
               width={600}
               height={600}
-              className="absolute inset-0 size-full object-contain select-none pointer-events-none"
+              className="frame-picture absolute inset-0 size-full object-contain select-none pointer-events-none"
             />
             {game.phase === 'playing' && (
               <>
@@ -359,31 +398,7 @@ export function GameBoard({
                 </button>
               </>
             )}
-
-            {/* Zoom toggle button in corner */}
-            <button
-              type="button"
-              aria-label={zoomed ? 'Уменьшить' : 'Приблизить'}
-              title={zoomed ? 'Уменьшить' : 'Приблизить'}
-              onClick={() => setZoomed((z) => !z)}
-              className="absolute right-2 top-2 z-30 flex size-8 items-center justify-center rounded-lg border border-white/20 bg-black/70 text-white/80 hover:bg-black hover:text-white transition-colors"
-            >
-              {zoomed ? (
-                <ZoomOut className="size-4" />
-              ) : (
-                <ZoomIn className="size-4" />
-              )}
-            </button>
           </div>
-
-          {/* Split-click instruction pill */}
-          {game.phase === 'playing' && (
-            <div className="flex items-center justify-center">
-              <span className="rounded-full border border-white/10 bg-secondary/80 px-3 py-0.5 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                Нажмите слева / справа для переключения
-              </span>
-            </div>
-          )}
 
           <div
             className="flex shrink-0 gap-2"
@@ -401,23 +416,35 @@ export function GameBoard({
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                 <span className="inline-flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 font-bold text-primary">
                   <Sparkles className="size-3.5" />
-                  {mine?.solved ? 'Заработано: +' : 'За ответ: +'}
-                  {mine?.solved
-                    ? mine.roundScore
-                    : Math.max(
-                        1,
-                        Math.min(
-                          (game.possibleScore ?? 20) -
-                            game.standings.filter((p) => p.solved).length * 2,
-                          ...game.standings
-                            .filter((p) => p.solved)
-                            .map((p) => p.roundScore - 2),
-                        ),
-                      )}{' '}
+                  {mine?.wrong
+                    ? 'Штраф: '
+                    : mine?.solved
+                      ? 'Заработано: +'
+                      : 'За ответ: +'}
+                  {mine?.wrong
+                    ? -4
+                    : mine?.solved
+                      ? mine.roundScore
+                      : Math.max(
+                          1,
+                          Math.min(
+                            (game.possibleScore ?? 20) -
+                              game.standings.filter((p) => p.solved).length * 2,
+                            ...game.standings
+                              .filter((p) => p.solved)
+                              .map((p) => p.roundScore - 2),
+                          ),
+                        )}{' '}
                   очков
                 </span>
-                <span className="text-muted-foreground">
-                  Кадр {game.stage + 1}/5 · следующий: −5 с, −4 очка
+                <span className="frame-position">
+                  <span>
+                    Кадр <strong>{game.stage + 1} / 5</strong>
+                  </span>
+                  <HelpTip label="Правила подсказок">
+                    Новый кадр: −5 секунд и −4 очка. Возврат к открытым кадрам —
+                    бесплатно. Клавиши ← и → переключают кадры.
+                  </HelpTip>
                 </span>
               </div>
               {navigation.error && (
@@ -468,14 +495,13 @@ export function GameBoard({
                 </h3>
                 <p className="mt-0.5 text-sm font-medium">
                   {mine?.roundScore
-                    ? `🎉 Ваш результат: +${mine.roundScore} очков`
-                    : 'В этом раунде без очков. Следующий раунд — новый шанс!'}
+                    ? `Ваш результат: ${mine.roundScore > 0 ? '+' : ''}${mine.roundScore} очков`
+                    : 'Раунд завершён без очков.'}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {game.roundNumber === game.totalRounds
-                    ? 'Финал партии'
-                    : `Следующий раунд ${game.roundNumber + 1} из ${game.totalRounds}`}{' '}
-                  через {remaining} с
+                    ? 'Показываем результаты…'
+                    : 'Следующий раунд…'}
                 </p>
               </div>
             </div>
@@ -483,12 +509,16 @@ export function GameBoard({
         )}
       </div>
       <Card className="game-standings rounded-xl px-3 py-2">
-        <h3 className="sr-only">Счёт</h3>
+        <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+          Игроки · время · очки
+        </h3>
         <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {game.standings.map((p) => (
-            <li
+            <m.li
+              initial={{ opacity: 0.6 }}
+              animate={{ opacity: 1 }}
               key={p.playerId}
-              className="flex min-w-0 items-center justify-between gap-3 rounded-xl bg-secondary/40 p-3 text-sm"
+              className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-secondary/60 p-2 text-sm"
             >
               <span>
                 <span className="mr-3 text-muted-foreground">
@@ -505,16 +535,26 @@ export function GameBoard({
                   <span className="mt-1 block text-xs font-semibold tabular-nums text-primary">
                     {p.solved
                       ? '✓ Готов'
-                      : p.skipped
-                        ? 'Пропустил'
-                        : p.expired || (p.deadline ?? game.endsAt) <= now
-                          ? 'Время вышло'
-                          : `${Math.max(0, Math.ceil(((p.deadline ?? game.endsAt) - now) / 1000))} с · угадывает`}
+                      : p.wrong
+                        ? 'Неверный ответ · −4'
+                        : p.skipped
+                          ? 'Пропустил'
+                          : p.expired || (p.deadline ?? game.endsAt) <= now
+                            ? 'Время вышло'
+                            : `${Math.max(0, Math.ceil(((p.deadline ?? game.endsAt) - now) / 1000))} с · угадывает`}
                   </span>
                 )}
               </span>
-              <strong className="tabular-nums">{p.score}</strong>
-            </li>
+              <m.strong
+                key={p.score}
+                initial={{ opacity: 0.5 }}
+                animate={{ opacity: 1 }}
+                className="text-xl tabular-nums text-primary"
+              >
+                {p.score}
+                <span className="ml-1 text-xs text-muted-foreground">оч.</span>
+              </m.strong>
+            </m.li>
           ))}
         </ol>
       </Card>
@@ -634,6 +674,20 @@ function AnswerForm({
       answer.mutate(title);
     }
   };
+  if (
+    game.answerMode === 'choices' &&
+    (game.personalWrong || answer.data?.status === 'incorrect')
+  )
+    return (
+      <Card role="status" className="border-destructive/30 p-4">
+        <p className="font-semibold text-destructive">
+          Неверный ответ · −4 очка
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Попытка завершена. Остальные ещё отвечают.
+        </p>
+      </Card>
+    );
   if (expired && !solved && !personal?.solved)
     return (
       <Card className="p-6" role="status">
@@ -651,13 +705,60 @@ function AnswerForm({
   if (solved || personal?.solved)
     return (
       <Card className="border-primary/40 p-5" role="status">
-        <p className="font-semibold text-primary">Верно! Очки уже ваши.</p>
+        <p className="font-semibold text-primary">Правильный ответ</p>
         <p className="text-sm text-muted-foreground">
           {game.standings.length === 1
             ? 'Показываем ответ и переходим дальше.'
             : 'Остальные ещё играют. Когда все закончат, сразу перейдём дальше.'}
         </p>
       </Card>
+    );
+  if (game.answerMode === 'choices')
+    return (
+      <div className="answer-form space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          {game.choices?.map((title, index) => (
+            <Button
+              key={title.id}
+              className="h-auto min-h-12 justify-start whitespace-normal text-left"
+              variant="outline"
+              disabled={
+                !connected ||
+                !!cooldown ||
+                answer.isPending ||
+                skip.isPending ||
+                game.personalWrong ||
+                answer.data?.status === 'incorrect'
+              }
+              onClick={() => answer.mutate(title)}
+            >
+              <span className="mr-2 text-muted-foreground">{index + 1}.</span>
+              {title.name} ({title.year})
+            </Button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <p role="status" className="text-sm text-muted-foreground">
+            {cooldown
+              ? `Следующая попытка через ${cooldown} с`
+              : answer.data?.status === 'incorrect'
+                ? 'Неверный ответ · −4 очка'
+                : 'Одна попытка · ошибка −4 очка'}
+          </p>
+          <Button
+            variant="ghost"
+            disabled={skip.isPending || !connected}
+            onClick={() => skip.mutate()}
+          >
+            Не знаю
+          </Button>
+        </div>
+        {answer.error && (
+          <p role="alert" className="text-destructive">
+            {answer.error.message}
+          </p>
+        )}
+      </div>
     );
   return (
     <form
@@ -680,61 +781,67 @@ function AnswerForm({
         Как называется это кино?
       </Label>
       <div className="answer-controls flex flex-wrap sm:flex-nowrap gap-2 items-center">
-        <Input
-          ref={inputRef}
-          className="answer-input h-14 rounded-xl text-base px-4 font-medium"
-          id="answer-search"
-          autoComplete="off"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-expanded={options.length > 0}
-          aria-controls={options.length ? 'answer-options' : undefined}
-          aria-activedescendant={
-            activeOption ? `answer-option-${activeOption.id}` : undefined
-          }
-          aria-describedby="answer-help"
-          onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing) return;
-            if (e.key === 'Escape') {
-              setDismissed(true);
-              setActive(-1);
-            } else if (
-              (e.key === 'ArrowDown' || e.key === 'ArrowUp') &&
-              options.length
-            ) {
-              e.preventDefault();
-              setActive((current) =>
-                e.key === 'ArrowDown'
-                  ? (current + 1) % options.length
-                  : (current <= 0 ? options.length : current) - 1,
-              );
-            } else if (e.key === 'Enter') {
-              e.preventDefault();
-              if (activeOption) {
-                choose(activeOption);
-              } else if (
-                selected &&
-                !cooldown &&
-                !expired &&
-                connected &&
-                !answer.isPending
-              ) {
-                answer.mutate();
-              }
+        <div className="answer-input answer-input-wrap">
+          <Input
+            ref={inputRef}
+            className="h-14 rounded-xl text-base pl-4 pr-12 font-medium"
+            id="answer-search"
+            autoComplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={options.length > 0}
+            aria-controls={options.length ? 'answer-options' : undefined}
+            aria-activedescendant={
+              activeOption ? `answer-option-${activeOption.id}` : undefined
             }
-          }}
-          maxLength={80}
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setSelected(null);
-            setActive(-1);
-            setDismissed(false);
-            answer.reset();
-          }}
-          placeholder="Начните вводить название по-русски…"
-          disabled={expired}
-        />
+            aria-describedby="answer-help"
+            onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
+              if (e.key === 'Escape') {
+                setDismissed(true);
+                setActive(-1);
+              } else if (
+                (e.key === 'ArrowDown' || e.key === 'ArrowUp') &&
+                options.length
+              ) {
+                e.preventDefault();
+                setActive((current) =>
+                  e.key === 'ArrowDown'
+                    ? (current + 1) % options.length
+                    : (current <= 0 ? options.length : current) - 1,
+                );
+              } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (activeOption) {
+                  choose(activeOption);
+                } else if (
+                  selected &&
+                  !cooldown &&
+                  !expired &&
+                  connected &&
+                  !answer.isPending
+                ) {
+                  answer.mutate();
+                }
+              }
+            }}
+            maxLength={80}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelected(null);
+              setActive(-1);
+              setDismissed(false);
+              answer.reset();
+            }}
+            placeholder="Название фильма"
+            disabled={expired}
+          />
+          <HelpTip label="Как ответить">
+            Введите название по-русски и выберите фильм из списка — ответ
+            отправится сразу. ↑ и ↓ — выбор, Enter — ответ.
+          </HelpTip>
+        </div>
         <p id="answer-help" className="sr-only">
           Найдите название и кликните по нему для мгновенного ответа. Стрелки —
           выбор, Enter — подтверждение.
@@ -823,20 +930,11 @@ function AnswerForm({
           {skip.isPending ? 'Пропускаем…' : 'Не знаю'}
         </Button>
       </div>
-      <div className="min-h-[22px] flex items-center">
-        {selected ? (
-          <p className="truncate text-xs text-muted-foreground">
-            Выбран фильм:{' '}
-            <strong className="text-foreground">{selected.name}</strong> ·{' '}
-            {selected.year ?? '—'}
-          </p>
-        ) : (
-          <p className="text-[11px] text-muted-foreground/60">
-            💡 Начните вводить название и кликните по подсказке для мгновенного
-            ответа
-          </p>
-        )}
-      </div>
+      {selected && (
+        <p className="truncate text-xs text-muted-foreground">
+          {selected.name} · {selected.year ?? '—'}
+        </p>
+      )}
       {skip.error && (
         <p role="alert" className="text-sm text-destructive">
           {skip.error.message}
@@ -846,7 +944,7 @@ function AnswerForm({
         {answer.error
           ? 'Не удалось отправить ответ. Проверьте связь и повторите.'
           : answer.data?.status === 'incorrect'
-            ? 'Пока нет. Можно попробовать другое название.'
+            ? 'Неверный ответ. Попробуйте другое название.'
             : answer.data?.status === 'finished'
               ? 'Ответ пришёл после окончания раунда.'
               : ''}
@@ -903,33 +1001,15 @@ function FinishedGameScreen({
   const maxPossible = (game.totalRounds || 1) * 20;
   const percentage = Math.round((myScore / maxPossible) * 100);
 
-  let rankTitle = 'Зритель премьеры';
-  let rankSubtitle =
-    'Хорошая тренировка! В следующей партии результат будет ещё лучше.';
-  let rankBadge = '🍿 Киноман';
-  if (percentage >= 80) {
-    rankTitle = 'Великий синефил';
-    rankSubtitle =
-      'Вы феноменально знаете кино! Почти каждый кадр взят с первой подсказки.';
-    rankBadge = '🏆 Легенда';
-  } else if (percentage >= 50) {
-    rankTitle = 'Опытный киноман';
-    rankSubtitle =
-      'Отличная эрудиция! Вы легко узнаёте культовые сцены и шедевры.';
-    rankBadge = '🎬 Знаток';
-  } else if (percentage >= 25) {
-    rankTitle = 'Любитель кино';
-    rankSubtitle = 'Хороший темп, большинство подсказок сработали верно.';
-    rankBadge = '🍿 Любитель';
-  }
-
+  const rankTitle = 'Результат игры';
+  const rankSubtitle = `${myScore} из ${maxPossible} очков`;
   const sorted = [...game.standings].sort((a, b) => b.score - a.score);
   const myRank = sorted.findIndex((p) => p.playerId === playerId) + 1;
 
   const [copied, setCopied] = useState(false);
   const handleShare = async () => {
     try {
-      const shareText = `Кадрово 🎬: набрал ${myScore} из ${maxPossible} очков (${percentage}%) в ${game.totalRounds} раундах! Звание: ${rankTitle}. Попробуй обогнать: ${typeof window !== 'undefined' ? window.location.origin : ''}`;
+      const shareText = `Кадрово 🎬: набрал ${myScore} из ${maxPossible} очков (${percentage}%) в ${game.totalRounds} раундах! Сыграть: ${typeof window !== 'undefined' ? window.location.origin : ''}`;
       await navigator.clipboard.writeText(shareText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
@@ -949,9 +1029,9 @@ function FinishedGameScreen({
           <h1 className="mt-2 text-3xl sm:text-4xl font-black tracking-tight text-white">
             {format === 'party' && sorted.length > 1
               ? myRank === 1
-                ? '🏆 Победа в кинозале!'
+                ? 'Вы победили'
                 : `Игра завершена · ${myRank} место`
-              : `${rankBadge} · ${rankTitle}`}
+              : rankTitle}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">{rankSubtitle}</p>
         </div>
@@ -971,7 +1051,7 @@ function FinishedGameScreen({
       <div className="grid gap-6 lg:grid-cols-12">
         {/* Left Column: Player Score Card & Actions (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
-          <div className="rounded-3xl border border-border/70 bg-card p-6 sm:p-8 flex flex-col justify-between">
+          <div className="rounded-2xl border border-border/70 surface-panel bg-card p-6 sm:p-8 flex flex-col justify-between">
             <div className="space-y-5">
               <div className="flex items-center justify-between">
                 <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">
@@ -1045,7 +1125,7 @@ function FinishedGameScreen({
                   size="lg"
                   onClick={restart}
                   disabled={restarting}
-                  className="w-full h-14 rounded-2xl bg-primary text-white font-black text-base shadow-xl shadow-primary/20 hover:brightness-110 active:scale-[0.98] transition-all"
+                  className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-black text-base shadow-sm hover:brightness-110 active:scale-[0.98] transition-all"
                 >
                   {restarting ? (
                     <span className="flex items-center gap-2">
@@ -1055,16 +1135,14 @@ function FinishedGameScreen({
                   ) : (
                     <span className="flex items-center gap-2">
                       <RotateCcw className="size-5" />
-                      {format === 'solo'
-                        ? 'Играть ещё раз'
-                        : 'Запустить реванш'}
+                      {format === 'solo' ? 'Играть ещё раз' : 'Сыграть ещё раз'}
                     </span>
                   )}
                 </Button>
               ) : format === 'party' && !isHost ? (
                 <div className="rounded-2xl border border-border/60 bg-secondary/70 p-4 text-center">
                   <p className="text-sm font-medium text-foreground">
-                    Ожидаем, пока организатор запустит реванш…
+                    Ожидаем новую игру
                   </p>
                 </div>
               ) : null}
@@ -1105,7 +1183,7 @@ function FinishedGameScreen({
         <div className="lg:col-span-5 space-y-6">
           {/* Last Movie Reveal Card */}
           {game.answer && (
-            <div className="rounded-3xl border border-border/70 bg-card p-6 space-y-4">
+            <div className="rounded-2xl border border-border/70 surface-panel bg-card p-6 space-y-4">
               <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">
                 {game.totalRounds === 1
                   ? 'Загаданный фильм'
@@ -1135,9 +1213,11 @@ function FinishedGameScreen({
                     {game.answer.year ?? '—'}
                   </p>
                   <p className="mt-2 text-xs font-semibold text-foreground">
-                    {mine?.roundScore
-                      ? `✓ Угадано: +${mine.roundScore} очков`
-                      : '— Фильм не был угадан'}
+                    {mine?.wrong
+                      ? 'Неверный ответ · −4 очка'
+                      : mine?.solved
+                        ? `Угадано: +${mine.roundScore} очков`
+                        : 'Фильм не угадан'}
                   </p>
                 </div>
               </div>
@@ -1145,12 +1225,10 @@ function FinishedGameScreen({
           )}
 
           {/* Standings / Leaderboard */}
-          <div className="rounded-3xl border border-border/70 bg-card p-6 space-y-4">
+          <div className="rounded-2xl border border-border/70 surface-panel bg-card p-6 space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-xs uppercase tracking-widest text-muted-foreground font-bold">
-                {sorted.length > 1
-                  ? 'Итоговый зачёт кинозала'
-                  : 'Участник игры'}
+                {sorted.length > 1 ? 'Результаты игроков' : 'Участник игры'}
               </p>
               <span className="text-xs text-muted-foreground">
                 {sorted.length} чел.

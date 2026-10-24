@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useSyncExternalStore } from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Volume2, VolumeX, ChevronDown } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   getSoundSettings,
@@ -38,8 +38,9 @@ export function SoundControls() {
         {settings.enabled && settings.volume > 0 ? <Volume2 /> : <VolumeX />}
       </Button>
       <details className="relative">
-        <summary className="cursor-pointer px-2 py-2 text-xs text-muted-foreground">
+        <summary className="flex cursor-pointer list-none items-center px-2 py-2 text-xs text-muted-foreground [&::-webkit-details-marker]:hidden">
           <span className="sr-only">Громкость</span>
+          <ChevronDown className="size-3" aria-hidden="true" />
         </summary>
         <div className="absolute right-0 top-full mt-2 w-52 rounded-xl border bg-background p-4 shadow-lg">
           <label htmlFor="sound-volume" className="text-sm">

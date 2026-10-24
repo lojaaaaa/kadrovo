@@ -22,6 +22,10 @@ export class PlayerRound {
     this.skipped = true;
     this.endsAt = now;
   }
+  finish(now: number) {
+    if (now >= this.startedAt && !this.solved)
+      this.endsAt = Math.min(this.endsAt, now);
+  }
   get deadline() {
     return this.endsAt;
   }

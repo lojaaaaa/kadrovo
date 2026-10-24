@@ -36,21 +36,21 @@ const modes = [
 ];
 export default function ModesPage() {
   return (
-    <main className="mx-auto max-w-6xl px-5 py-10">
+    <main className="screen screen--modes mx-auto max-w-6xl px-5 py-10">
       <p className="text-xs uppercase tracking-[.25em] text-primary">
         Способы вспомнить кино
       </p>
-      <h1 className="cinema-title mt-4 text-5xl md:text-6xl">
+      <h1 className="cinema-title mt-3 text-3xl md:text-4xl">
         Знакомое кино.
         <br />
         Новая загадка.
       </h1>
-      <div className="mt-10 grid gap-4 md:grid-cols-2">
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
         {modes.map((m) => (
           <Link
             key={m.id}
             href={`/play/solo?mode=${m.id}`}
-            className="cinema-panel rounded-3xl border p-8 transition hover:border-primary/40"
+            className="mode-choice cinema-panel rounded-2xl border p-5 transition hover:border-primary/40"
           >
             <m.icon className="size-7 text-primary" />
             <h2 className="mt-6 text-2xl font-semibold">{m.name}</h2>
@@ -61,7 +61,7 @@ export default function ModesPage() {
           </Link>
         ))}
       </div>
-      <section className="mt-12">
+      <section className="mt-8">
         <p className="text-xs uppercase tracking-widest text-primary">
           Следующие идеи · пока не доступны
         </p>

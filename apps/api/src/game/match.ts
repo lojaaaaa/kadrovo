@@ -1,9 +1,10 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomInt } from 'node:crypto';
 import type {
   AnswerCommand,
   CreateRoom,
   GamePersonal,
   GameSnapshot,
+  TitleOption,
 } from '@filmless/contracts';
 import type { Question } from './catalog';
 import { PlayerRound, type Result } from './round';
@@ -14,6 +15,7 @@ type Participant = {
   roundScore: number;
   solved: boolean;
   expired: boolean;
+  wrong: boolean;
   attempts: PlayerRound;
   nextAllowedAt: number;
   finishOrder?: number;
@@ -28,6 +30,7 @@ export class Match {
   private nextAt: number;
   private stage = 0;
   private players: Participant[];
+  private choiceRounds = new Map<number, TitleOption[]>();
   private departed = new Set<string>();
   constructor(
     private readonly deck: Question[],
@@ -36,9 +39,24 @@ export class Match {
     now: number,
     private readonly roundMs = 45_000,
     private readonly revealMs = 3_000,
+    private readonly answerMode: 'search' | 'choices' = 'search',
+    private readonly choicePool: TitleOption[] = [],
   ) {
     if (!deck.length || roundMs <= 0 || revealMs <= 0)
       throw new Error('Invalid match settings');
+    if (
+      answerMode === 'choices' &&
+      deck.some(
+        (q) =>
+          new Set(
+            [
+              q.title,
+              ...choicePool.filter((t) => t.category === q.title.category),
+            ].map((t) => t.name.toLocaleLowerCase('ru')),
+          ).size < 4,
+      )
+    )
+      throw new Error('Для выбора нужны четыре разных названия в категории.');
     this.startedAt = now;
     this.endsAt = now + roundMs;
     this.nextAt = this.endsAt + revealMs;
@@ -49,9 +67,43 @@ export class Match {
       roundScore: 0,
       solved: false,
       expired: false,
+      wrong: false,
       nextAllowedAt: 0,
       attempts: new PlayerRound(deck[0]!.title.id, now, this.endsAt),
     }));
+  }
+  private choices() {
+    if (this.answerMode !== 'choices') return undefined;
+    let options = this.choiceRounds.get(this.index);
+    if (!options) {
+      const correct = this.deck[this.index]!.title;
+      const seen = new Set([correct.id]);
+      const names = new Set([correct.name.toLocaleLowerCase('ru')]);
+      const candidates = this.choicePool.filter(
+        (t) => t.category === correct.category && t.id !== correct.id,
+      );
+      for (let i = candidates.length - 1; i > 0; i--) {
+        const j = randomInt(i + 1);
+        [candidates[i], candidates[j]] = [candidates[j]!, candidates[i]!];
+      }
+      options = [correct];
+      for (const t of candidates) {
+        if (seen.has(t.id) || names.has(t.name.toLocaleLowerCase('ru')))
+          continue;
+        options.push(t);
+        seen.add(t.id);
+        names.add(t.name.toLocaleLowerCase('ru'));
+        if (options.length === 4) break;
+      }
+      if (options.length !== 4)
+        throw new Error('Для выбора нужны четыре разных названия в категории.');
+      for (let i = options.length - 1; i > 0; i--) {
+        const j = randomInt(i + 1);
+        [options[i], options[j]] = [options[j]!, options[i]!];
+      }
+      this.choiceRounds.set(this.index, options);
+    }
+    return options;
   }
   get active() {
     return this.phase !== 'finished';
@@ -96,6 +148,7 @@ export class Match {
         p.roundScore = 0;
         p.solved = false;
         p.expired = false;
+        p.wrong = false;
         p.nextAllowedAt = 0;
         p.attempts = new PlayerRound(
           this.deck[this.index]!.title.id,
@@ -137,6 +190,11 @@ export class Match {
       throw new Error('Этот раунд уже закончился.');
     if (this.phase !== 'playing')
       return { status: 'finished', score: 0, nextAllowedAt: p.nextAllowedAt };
+    if (
+      this.answerMode === 'choices' &&
+      !this.choices()?.some((t) => t.id === command.titleId)
+    )
+      throw new Error('Выберите один из четырёх вариантов.');
     const result = p.attempts.answer({ ...command, receivedAt: now });
     if (result.status === 'correct' && !p.solved) {
       const earlier = this.players.filter((player) => player.solved).length;
@@ -154,6 +212,18 @@ export class Match {
       p.solved = true;
       p.score += result.score;
       p.roundScore = result.score;
+    }
+    if (
+      this.answerMode === 'choices' &&
+      result.status === 'incorrect' &&
+      !p.wrong
+    ) {
+      p.wrong = true;
+      p.expired = true;
+      p.roundScore = -4;
+      p.score -= 4;
+      result.score = -4;
+      p.attempts.finish(now);
     }
     p.nextAllowedAt = result.nextAllowedAt;
     if (
@@ -203,6 +273,17 @@ export class Match {
           : 'spotlight'
         : this.mode;
     return {
+      answerMode: this.answerMode,
+      ...(this.answerMode === 'choices'
+        ? {
+            choices: this.choices()?.map(({ id, name, year, category }) => ({
+              id,
+              name,
+              year,
+              category,
+            })),
+          }
+        : {}),
       matchId: this.id,
       roundId: this.roundId,
       phase: this.phase,
@@ -212,6 +293,7 @@ export class Match {
       stage,
       unlockedStage: personal?.attempts.openedStage ?? 0,
       possibleScore: personal?.attempts.possibleScore ?? 20,
+      personalWrong: personal?.wrong ?? false,
       personalSkipped: personal?.attempts.skipped ?? false,
       personalExpired: personal?.expired ?? false,
       roundDurationMs: this.roundMs,
@@ -235,6 +317,7 @@ export class Match {
             solved,
             attempts,
             expired,
+            wrong,
             finishOrder,
           }) => ({
             playerId,
@@ -245,6 +328,7 @@ export class Match {
             deadline: attempts.deadline,
             expired,
             skipped: attempts.skipped,
+            wrong,
             finishOrder,
           }),
         )

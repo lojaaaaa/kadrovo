@@ -137,10 +137,13 @@ describe('solo and random duels', () => {
   });
 });
 
-it('matches four people in a group, starts after all connect, and separates duel queues', () => {
+it('matches eight people in a group, starts after all connect, and separates duel queues', () => {
   const rooms = new RoomsService(catalog);
   const queue = new BattleService(rooms);
-  const users = ['a', 'b', 'c', 'd'].map((id) => ({ id, nickname: id }));
+  const users = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id) => ({
+    id,
+    nickname: id,
+  }));
   queue.quickJoin({ id: 'duelist', nickname: 'Duelist' }, 'duel');
   for (const user of users) queue.quickJoin(user, 'group');
   expect(queue.quickStatus('duelist').status).toBe('waiting');
@@ -152,14 +155,14 @@ it('matches four people in a group, starts after all connect, and separates duel
   expect(new Set(sessions.map((s) => s.code)).size).toBe(1);
   for (const [i, s] of sessions.entries())
     rooms.connect(s.code, s.token, String(i));
-  expect(rooms.snapshot(sessions[0]!.code).game?.standings).toHaveLength(4);
+  expect(rooms.snapshot(sessions[0]!.code).game?.standings).toHaveLength(8);
   expect(rooms.directory()).toEqual([]);
 });
 
 it('does not start a four-player match with only three connections', () => {
   const rooms = new RoomsService(catalog);
   const sessions = rooms.createQuick(
-    ['a', 'b', 'c', 'd'].map((nickname) => ({ nickname })),
+    ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((nickname) => ({ nickname })),
   );
   for (const [i, s] of sessions.slice(0, 3).entries())
     rooms.connect(s.code, s.token, 'three-' + i);
@@ -189,4 +192,15 @@ it('adds a completed quick match to the activity feed once without leaking room 
   expect(JSON.stringify(feed)).not.toContain(sessions[0]!.code);
   expect(JSON.stringify(feed)).not.toContain(sessions[0]!.token);
   expect(feed[0]?.players).toBe(2);
+});
+
+it('starts a small company after the gathering window instead of waiting for eight', () => {
+  vi.useFakeTimers();
+  const queue = new BattleService(new RoomsService(catalog));
+  queue.quickJoin({ id: 'one', nickname: 'Один' }, 'group');
+  queue.quickJoin({ id: 'two', nickname: 'Два' }, 'group');
+  expect(queue.quickStatus('one').status).toBe('waiting');
+  vi.advanceTimersByTime(8001);
+  expect(queue.quickStatus('one').status).toBe('matched');
+  expect(queue.quickStatus('two').status).toBe('matched');
 });

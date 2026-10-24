@@ -49,7 +49,7 @@ export function BattleLobby() {
   }, [session, router]);
   const waiting = queue.data?.status === 'waiting';
   return (
-    <main className="mx-auto max-w-xl px-5 py-12">
+    <main className="screen screen--battle-lobby mx-auto max-w-xl px-5 py-12">
       <Card className="space-y-5 p-8">
         <p className="text-sm uppercase tracking-widest text-primary">
           Батл · 1 на 1

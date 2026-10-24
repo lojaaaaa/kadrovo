@@ -1,5 +1,7 @@
 'use client';
+import { SectionSkeleton } from './section-skeleton';
 import Link from 'next/link';
+import { m } from './motion-system';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -70,16 +72,20 @@ export function OnlineHub() {
   }, [session, router]);
   const waiting = queue.data?.status === 'waiting';
   return (
-    <main className="mx-auto max-w-6xl px-4 py-8">
+    <main className="screen screen--online-hub mx-auto max-w-6xl px-4 py-8">
       <h1 className="mb-6 text-3xl font-bold">Онлайн</h1>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="space-y-5">
           {waiting || queue.data?.status === 'matched' ? (
-            <div
-              className="flex min-h-72 flex-col items-center justify-center gap-5 rounded-3xl border bg-card p-8"
+            <m.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="queue-wait flex min-h-64 flex-col items-center justify-center gap-5 rounded-2xl border surface-panel bg-card p-8"
               role="status"
             >
-              <LoaderCircle className="size-12 animate-spin text-primary" />
+              <div className="queue-orbit">
+                <LoaderCircle className="size-9 animate-spin text-primary" />
+              </div>
               <h2 className="text-2xl font-bold">
                 {session ? 'Игра найдена' : 'Ищем игроков'}
               </h2>
@@ -93,7 +99,10 @@ export function OnlineHub() {
               >
                 Отменить поиск
               </Button>
-            </div>
+            </m.div>
+          ) : account.isPending ||
+            (!!account.data?.account && queue.isPending) ? (
+            <SectionSkeleton kind="home" />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {[
@@ -106,12 +115,17 @@ export function OnlineHub() {
                 {
                   id: 'group' as const,
                   name: 'Компания',
-                  count: '4 игрока',
+                  count: '2–8 игроков',
                   icon: Users,
                 },
               ].map(({ id, name, count, icon: Icon }) => (
-                <div key={id} className="rounded-3xl border bg-card p-7">
-                  <Icon className="mb-8 size-9 text-primary" />
+                <m.div
+                  key={id}
+                  initial={{ opacity: 0.7, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="quick-mode-card rounded-2xl border surface-panel bg-card p-5"
+                >
+                  <Icon className="mb-5 size-7 text-primary" />
                   <h2 className="text-2xl font-bold">{name}</h2>
                   <p className="my-3 text-muted-foreground">{count}</p>
                   <Button
@@ -125,7 +139,7 @@ export function OnlineHub() {
                   >
                     Играть
                   </Button>
-                </div>
+                </m.div>
               ))}
             </div>
           )}
@@ -138,20 +152,24 @@ export function OnlineHub() {
             href="/lobbies"
             className="flex items-center justify-between rounded-2xl border p-5 font-semibold hover:border-primary"
           >
-            Кастомные лобби
+            Комнаты и приглашения
             <ArrowRight className="size-5" />
           </Link>
         </section>
-        <aside className="rounded-3xl border bg-card p-5">
+        <aside className="rounded-2xl border surface-panel bg-card p-5">
           <h2 className="mb-5 font-bold">
             Последние игры <span className="text-primary">●</span>
           </h2>
           <div aria-live="polite" className="space-y-3">
-            {activity.data?.length ? (
+            {activity.isPending ? (
+              <SectionSkeleton />
+            ) : activity.data?.length ? (
               activity.data.map((item) => (
-                <div
+                <m.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
                   key={item.id}
-                  className="flex items-center justify-between gap-3 rounded-xl bg-secondary/40 p-3"
+                  className="activity-row flex items-center justify-between gap-3 rounded-xl bg-secondary/40 p-3"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium">{item.nickname}</p>
@@ -160,7 +178,7 @@ export function OnlineHub() {
                     </p>
                   </div>
                   <strong>{item.score}</strong>
-                </div>
+                </m.div>
               ))
             ) : (
               <p className="text-sm text-muted-foreground">

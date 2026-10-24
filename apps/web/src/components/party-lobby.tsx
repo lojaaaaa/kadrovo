@@ -1,4 +1,5 @@
 'use client';
+import { HelpTip } from './ui/help-tip';
 import { CollectionPicker } from './collection-picker';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
@@ -113,29 +114,33 @@ export function PartyLobby({
             <p className="text-xs uppercase tracking-[.2em] text-muted-foreground">
               Лобби
             </p>
-            <h2 className="mt-1 text-3xl font-black">Зал ожидания</h2>
+            <h2 className="mt-1 text-3xl font-black">
+              {room.name || 'Зал ожидания'}
+            </h2>
             <p className="mt-2 text-sm text-muted-foreground">
               {modeLabels[room.mode]} · {categoryLabels[room.category]}
             </p>
           </div>
         </div>
-        <Button
-          variant="outline"
-          className="border-destructive/40 text-destructive"
-          onClick={leave}
-          disabled={!connected || pending}
-        >
-          <LogOut className="size-4" />
-          Выйти
-        </Button>
-        <span className="rounded-full border px-4 py-2 text-xs uppercase tracking-widest">
-          {room.players.filter((p) => p.connected).length} в сети ·{' '}
-          {room.totalRounds ?? 3} раунда
-        </span>
+        <div className="lobby-header-actions">
+          <span className="lobby-meta">
+            {room.players.filter((p) => p.connected).length} в сети ·{' '}
+            {room.totalRounds ?? 3} раундов
+          </span>
+          <Button
+            variant="outline"
+            className="lobby-leave"
+            onClick={leave}
+            disabled={pending}
+          >
+            <LogOut className="size-4" />
+            Выйти из лобби
+          </Button>
+        </div>
       </header>
       <div className="lobby-columns grid items-start gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4">
-          <section className="space-y-3 rounded-2xl border bg-card p-4">
+          <section className="space-y-3 rounded-2xl border surface-panel bg-card p-4">
             <p className="text-xs uppercase tracking-widest text-muted-foreground">
               Код комнаты
             </p>
@@ -147,7 +152,7 @@ export function PartyLobby({
               {room.code}
             </button>
             <p className="text-sm text-muted-foreground">
-              Отправьте друзьям код или ссылку. Аккаунт для входа не нужен.
+              Для входа достаточно ссылки или кода.
             </p>
             <Input
               aria-label="Ссылка для друзей"
@@ -170,7 +175,7 @@ export function PartyLobby({
               </Button>
             </div>
           </section>
-          <section className="rounded-2xl border bg-card p-6">
+          <section className="rounded-2xl border surface-panel bg-card p-6">
             <div className="mb-5 flex items-center justify-between">
               <h3 className="flex items-center gap-2 font-bold">
                 <Users className="size-4" />
@@ -233,18 +238,50 @@ export function PartyLobby({
             )}
           </section>
         </div>
-        <section className="lobby-settings min-w-0 space-y-3 rounded-2xl border bg-card p-4">
+        <section className="lobby-settings min-w-0 space-y-3 rounded-2xl border surface-panel bg-card p-4">
           <div className="flex justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                Настройки партии
-              </p>
-              <h3 className="mt-2 text-xl font-bold">
-                {host ? 'Управление организатора' : 'Параметры игры'}
+              <h3 className="text-lg font-semibold">
+                {host ? 'Настройки' : 'Параметры игры'}
               </h3>
             </div>
             <Clock3 className="size-5 text-primary" />
           </div>
+          <label className="mb-4 block space-y-2 text-sm font-semibold">
+            Название комнаты
+            <Input
+              key={room.name}
+              defaultValue={room.name}
+              maxLength={60}
+              disabled={!editable}
+              onBlur={(e) => {
+                const name = e.target.value.trim();
+                if (name && name !== room.name) update.mutate({ name });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+              }}
+            />
+          </label>
+          <fieldset disabled={!editable} className="mb-4 space-y-2">
+            <legend className="mb-2 text-sm font-semibold">Ответы</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(['search', 'choices'] as const).map((value) => (
+                <Button
+                  key={value}
+                  aria-pressed={(room.answerMode ?? 'search') === value}
+                  variant={
+                    (room.answerMode ?? 'search') === value
+                      ? 'default'
+                      : 'outline'
+                  }
+                  onClick={() => update.mutate({ answerMode: value })}
+                >
+                  {value === 'search' ? 'Ввод названия' : 'Выбор из 4'}
+                </Button>
+              ))}
+            </div>
+          </fieldset>
           <fieldset disabled={!editable} className="min-w-0 space-y-3">
             <legend className="mb-3 text-xs uppercase tracking-widest text-muted-foreground">
               Режим
@@ -288,15 +325,15 @@ export function PartyLobby({
           </fieldset>
           <fieldset disabled={!editable} className="min-w-0">
             <legend className="mb-3 text-xs uppercase tracking-widest text-muted-foreground">
-              Темп и таймер раунда
+              Время на раунд
             </legend>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
               {[
-                { sec: 15, label: '15 с · Пуля' },
-                { sec: 30, label: '30 с · Блиц' },
-                { sec: 45, label: '45 с · Рапид' },
+                { sec: 15, label: '15 с' },
+                { sec: 30, label: '30 с' },
+                { sec: 45, label: '45 с' },
                 { sec: 60, label: '60 с' },
-                { sec: 90, label: '90 с · Марафон' },
+                { sec: 90, label: '90 с' },
               ].map(({ sec, label }) => (
                 <Button
                   key={sec}
@@ -363,19 +400,16 @@ export function PartyLobby({
               </div>
             </details>
           )}
-          <div className="rounded-2xl border bg-background/40 p-4">
-            <p className="font-semibold">
-              {room.source === 'catalog' ? 'Кинокаталог' : 'Демоподборка'}
-            </p>
-            <p className="mt-2 text-sm text-muted-foreground">
+          <div className="lobby-content-meta">
+            <span>
               {room.source === 'catalog'
-                ? `${count} готовых загадок · ${room.totalRounds ?? 3} случайных раундов в партии`
-                : 'Схематичные иллюстрации для знакомства с игрой'}
-            </p>
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-              Личные кадры и таймер. Новая подсказка: −5 секунд и −4 очка.
-              Максимум за фильм — 20 очков.
-            </p>
+                ? `${count} фильмов доступно`
+                : 'Демоподборка'}
+            </span>
+            <HelpTip label="Как начисляются очки">
+              За фильм — до 20 очков. Новый кадр отнимает 5 секунд и 4 очка.
+              Кадры и таймер у каждого игрока свои.
+            </HelpTip>
           </div>
           {update.error && (
             <p role="alert" className="text-sm text-destructive">
@@ -384,7 +418,7 @@ export function PartyLobby({
           )}
         </section>
       </div>
-      <footer className="lobby-actions rounded-2xl border bg-card p-3">
+      <footer className="lobby-actions rounded-2xl border surface-panel bg-card p-3">
         <p className="mb-2 text-sm text-muted-foreground" role="status">
           {reason}
         </p>
@@ -395,7 +429,7 @@ export function PartyLobby({
             disabled={!connected || pending || update.isPending}
             onClick={ready}
           >
-            {me?.ready ? '✓ Вы готовы · отменить' : 'Я готов'}
+            {me?.ready ? 'Готов · отменить' : 'Готов'}
           </Button>
           {host ? (
             <Button
@@ -412,7 +446,7 @@ export function PartyLobby({
               {starting
                 ? 'Запускаем…'
                 : !allReady
-                  ? 'Запустить принудительно'
+                  ? 'Начать игру'
                   : room.game
                     ? 'Реванш'
                     : 'Начать игру'}

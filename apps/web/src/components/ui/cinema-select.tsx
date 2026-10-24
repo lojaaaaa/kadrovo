@@ -19,7 +19,7 @@ export function CinemaSelect({
       <Select.Trigger
         id={id}
         aria-label={label}
-        className="mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-xl border bg-background/60 px-4 text-left text-sm shadow-sm outline-none transition hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary"
+        className="cinema-select-trigger mt-2 flex h-12 w-full items-center justify-between gap-3 rounded-xl border bg-background/60 px-4 text-left text-sm shadow-sm outline-none transition hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary"
       >
         <Select.Value />
         <Select.Icon>
@@ -30,7 +30,7 @@ export function CinemaSelect({
         <Select.Content
           position="popper"
           sideOffset={8}
-          className="z-50 max-h-80 w-[var(--radix-select-trigger-width)] min-w-48 overflow-hidden rounded-xl border bg-card p-1.5 shadow-2xl animate-in fade-in-0 zoom-in-95"
+          className="cinema-select-content z-50 max-h-80 w-[var(--radix-select-trigger-width)] min-w-48 overflow-hidden rounded-xl border bg-card p-1.5 shadow-2xl animate-in fade-in-0 zoom-in-95"
         >
           <Select.ScrollUpButton className="flex justify-center">
             <ChevronUp className="size-4" />
@@ -40,7 +40,7 @@ export function CinemaSelect({
               <Select.Item
                 key={o.value}
                 value={o.value}
-                className="relative cursor-pointer rounded-lg py-3 pl-4 pr-9 outline-none data-[highlighted]:bg-secondary data-[state=checked]:text-primary"
+                className="cinema-select-option relative cursor-pointer rounded-lg py-3 pl-4 pr-9 outline-none data-[highlighted]:bg-secondary data-[state=checked]:text-primary"
               >
                 <Select.ItemText>{o.label}</Select.ItemText>
                 {o.description && (

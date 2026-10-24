@@ -1,4 +1,5 @@
 'use client';
+import { SectionSkeleton } from './section-skeleton';
 import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -78,20 +79,24 @@ export function AccountForm() {
     setPassword('');
     mutation.reset();
   }
+  if (query.isPending)
+    return (
+      <main className="screen screen--account-form mx-auto max-w-lg px-5 py-8">
+        <SectionSkeleton kind="form" />
+      </main>
+    );
   return (
-    <main className="mx-auto max-w-lg px-5 py-12">
+    <main className="screen screen--account-form mx-auto max-w-lg px-5 py-12">
       <Link href="/" className="text-xl font-bold">
         кадрово<span className="text-primary">.</span>
       </Link>
-      <Card className="mt-10 space-y-5 p-7">
+      <Card key={mode} className="mt-6 space-y-5 p-6">
         {query.data?.account && mode !== 'reset' && mode !== 'verify' ? (
           <>
             <h1 className="text-3xl font-bold">
-              Привет, {query.data.account.nickname}
+              {query.data.account.nickname}
             </h1>
-            <p className="text-muted-foreground">
-              Аккаунт готов. Найдите соперника или сыграйте с друзьями.
-            </p>
+            <p className="text-muted-foreground">Вы вошли в аккаунт.</p>
             <Link href="/profile" className="font-semibold text-primary">
               Открыть профиль →
             </Link>

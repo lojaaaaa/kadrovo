@@ -245,3 +245,120 @@ it('exposes personal deadlines and finishing positions while retaining the 20 po
     m.snapshot(3000).standings.find((p) => p.playerId === 'b')?.finishOrder,
   ).toBe(2);
 });
+
+it('shares four stable distinct choices and rejects answers outside the offered set', () => {
+  const pool = [
+    ...deck.map((q) => q.title),
+    {
+      id: 'decoy',
+      name: 'Другой фильм',
+      year: 2004,
+      category: 'movies' as const,
+    },
+  ];
+  const m = new Match(
+    deck,
+    'frames',
+    players,
+    1000,
+    45000,
+    3000,
+    'choices',
+    pool,
+  );
+  const a = m.snapshot(1000, 'a');
+  expect(a.choices).toHaveLength(4);
+  expect(new Set(a.choices!.map((t) => t.id)).size).toBe(4);
+  expect(m.snapshot(1100, 'b').choices).toEqual(a.choices);
+  expect(a.answer).toBeUndefined();
+  expect(() => m.answer('a', command(m, 'unlisted'), 1200)).toThrow('Выберите');
+  expect(m.answer('a', command(m), 1300).status).toBe('correct');
+});
+
+it('ends a choice attempt after one error, deducts once, and leaves opponents playing', () => {
+  const pool = [
+    ...deck.map((q) => q.title),
+    {
+      id: 'decoy',
+      name: 'Другой фильм',
+      year: 2004,
+      category: 'movies' as const,
+    },
+  ];
+  const m = new Match(
+    deck,
+    'frames',
+    players,
+    1000,
+    45000,
+    3000,
+    'choices',
+    pool,
+  );
+  const wrong = command(m, 'decoy');
+  expect(m.answer('a', wrong, 1200)).toMatchObject({
+    status: 'incorrect',
+    score: -4,
+  });
+  expect(m.snapshot(1200, 'a')).toMatchObject({
+    phase: 'playing',
+    personalWrong: true,
+  });
+  expect(
+    m.snapshot(1200).standings.find((p) => p.playerId === 'a'),
+  ).toMatchObject({ score: -4, roundScore: -4, wrong: true, expired: true });
+  m.answer('a', wrong, 1300);
+  expect(m.answer('a', command(m), 4400).status).toBe('finished');
+  expect(
+    m.snapshot(4400).standings.find((p) => p.playerId === 'a')?.score,
+  ).toBe(-4);
+  expect(m.answer('b', command(m), 4500).status).toBe('correct');
+  expect(m.snapshot(4500).phase).toBe('reveal');
+  m.advance(7501);
+  expect(m.snapshot(7501, 'a')).toMatchObject({
+    roundNumber: 2,
+    personalWrong: false,
+    phase: 'playing',
+  });
+  expect(m.answer('a', command(m, 'title-1'), 7600).score).toBe(20);
+  expect(
+    m.snapshot(7600).standings.find((p) => p.playerId === 'a')?.score,
+  ).toBe(16);
+});
+it('reveals immediately when a solo player chooses the wrong answer', () => {
+  const pool = [
+    ...deck.map((q) => q.title),
+    {
+      id: 'decoy',
+      name: 'Другой фильм',
+      year: 2004,
+      category: 'movies' as const,
+    },
+  ];
+  const m = new Match(
+    deck,
+    'frames',
+    players.slice(0, 1),
+    1000,
+    45000,
+    1000,
+    'choices',
+    pool,
+  );
+  m.answer('a', command(m, 'decoy'), 1300);
+  expect(m.snapshot(1300, 'a')).toMatchObject({
+    phase: 'reveal',
+    personalWrong: true,
+  });
+});
+it('keeps repeated search answers available without a choice penalty', () => {
+  const m = new Match(deck, 'frames', players, 1000);
+  expect(m.answer('a', command(m, 'wrong'), 1200)).toMatchObject({
+    status: 'incorrect',
+    score: 0,
+  });
+  expect(m.answer('a', command(m), 4300)).toMatchObject({
+    status: 'correct',
+    score: 20,
+  });
+});

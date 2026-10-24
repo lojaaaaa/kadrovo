@@ -194,6 +194,9 @@ export class DemoCatalog implements OnModuleInit {
     }
     return result;
   }
+  options(category: CreateRoom['category']) {
+    return titles.filter((t) => t.category === category);
+  }
   search(category: CreateRoom['category'], query: string) {
     return searchTitles(searchEntries, category, query);
   }

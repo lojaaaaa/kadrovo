@@ -1,5 +1,7 @@
 'use client';
 
+import { HelpTip } from './ui/help-tip';
+import { TextCursorInput, ListChecks, LockKeyhole, Globe2 } from 'lucide-react';
 import { CollectionPicker } from './collection-picker';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -92,6 +94,8 @@ export function CreateRoomForm({
   });
 
   const format = initialFormat;
+  const [roomName, setRoomName] = useState('');
+  const [answerMode, setAnswerMode] = useState<'search' | 'choices'>('search');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [totalRounds, setTotalRounds] = useState<RoundCount>(5);
   const [roundSeconds, setRoundSeconds] = useState<15 | 30 | 45 | 60 | 90>(45);
@@ -123,17 +127,14 @@ export function CreateRoomForm({
   const canUseCatalog = availability.data?.ready === true && count >= 3;
   const source = chosenSource ?? (canUseCatalog ? 'catalog' : 'demo');
 
-  const selectedPreset =
-    timeControlPresets.find((p) => p.seconds === roundSeconds) ??
-    timeControlPresets[2];
-
   const mutation = useMutation({
     mutationFn: async () => {
       const session = await roomRequest('', {
-        nickname:
-          nickname.trim() || (format === 'solo' ? 'Киноман' : 'Капитан'),
+        nickname: nickname.trim() || (format === 'solo' ? 'Киноман' : 'Игрок'),
         format,
         visibility,
+        name: roomName.trim() || undefined,
+        answerMode,
         roundSeconds,
         totalRounds,
         category,
@@ -149,40 +150,81 @@ export function CreateRoomForm({
 
   return (
     <form
-      className="space-y-8 rounded-3xl border border-border/70 bg-card p-6 shadow-2xl md:p-8"
+      className="create-room-form space-y-6 rounded-2xl border border-border/70 surface-panel bg-card p-5 md:p-6"
       onSubmit={(e) => {
         e.preventDefault();
         mutation.mutate();
       }}
     >
-      {format === 'party' && (
-        <fieldset className="space-y-3">
-          <legend className="mb-2 font-semibold">Кто может войти?</legend>
-          <div className="grid grid-cols-2 gap-3">
-            {(
-              [
-                { id: 'private', label: 'По ссылке' },
-                { id: 'public', label: 'Открытая комната' },
-              ] as const
-            ).map((item) => (
+      <div
+        className={`room-setup-row ${format === 'solo' ? 'room-setup-row--solo' : ''}`}
+      >
+        {format === 'party' && (
+          <div className="room-name-field">
+            <Label htmlFor="room-name">Название комнаты</Label>
+            <Input
+              id="room-name"
+              maxLength={60}
+              placeholder="Например, Вечер кино"
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+            />
+          </div>
+        )}
+        <fieldset className="room-compact-options">
+          <legend className="sr-only">Способ ответа</legend>
+          <div className="room-option-group">
+            {(['search', 'choices'] as const).map((value) => (
               <Button
-                key={item.id}
+                key={value}
                 type="button"
-                variant={visibility === item.id ? 'default' : 'outline'}
-                aria-pressed={visibility === item.id}
-                onClick={() => setVisibility(item.id)}
+                className="room-option"
+                variant="ghost"
+                aria-pressed={answerMode === value}
+                onClick={() => setAnswerMode(value)}
               >
-                {item.label}
+                {value === 'search' ? (
+                  <TextCursorInput aria-hidden="true" />
+                ) : (
+                  <ListChecks aria-hidden="true" />
+                )}
+                {value === 'search' ? 'Ввод названия' : 'Выбор из 4'}
               </Button>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">
-            {visibility === 'private'
-              ? 'Комната не отображается в списке.'
-              : 'Комната появится в списке лобби, к ней смогут присоединиться другие игроки.'}
-          </p>
         </fieldset>
-      )}
+        {format === 'party' && (
+          <fieldset className="room-compact-options">
+            <legend className="sr-only">Доступ к комнате</legend>
+            <div className="room-access-options">
+              <div className="room-option-group">
+                {(
+                  [
+                    { id: 'private', label: 'По ссылке', icon: LockKeyhole },
+                    { id: 'public', label: 'Открытая', icon: Globe2 },
+                  ] as const
+                ).map((item) => (
+                  <Button
+                    key={item.id}
+                    type="button"
+                    className="room-option"
+                    variant="ghost"
+                    aria-pressed={visibility === item.id}
+                    onClick={() => setVisibility(item.id)}
+                  >
+                    <item.icon aria-hidden="true" />
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+              <HelpTip label="Доступ к комнате">
+                По ссылке: комната скрыта из списка. Открытая: видна в лобби, к
+                ней могут присоединиться другие игроки.
+              </HelpTip>
+            </div>
+          </fieldset>
+        )}
+      </div>
       {/* 1. Game Mode Cards */}
       <fieldset className="space-y-3">
         <div className="flex items-center justify-between">
@@ -219,14 +261,14 @@ export function CreateRoomForm({
                     <span
                       className={`flex size-10 items-center justify-center rounded-xl border ${
                         isSelected
-                          ? 'border-primary bg-primary text-white'
-                          : 'border-border/60 bg-card text-muted-foreground group-hover:text-foreground'
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border/60 surface-panel bg-card text-muted-foreground group-hover:text-foreground'
                       }`}
                     >
                       <Icon className="size-5" />
                     </span>
                     {isSelected ? (
-                      <span className="flex size-5 items-center justify-center rounded-full bg-primary text-white shadow-sm">
+                      <span className="flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
                         <Check className="size-3 stroke-[3]" />
                       </span>
                     ) : (
@@ -296,11 +338,9 @@ export function CreateRoomForm({
           <div className="flex items-center justify-between">
             <legend className="text-sm font-semibold tracking-tight text-white flex items-center gap-2">
               <Timer className="size-4 text-primary" />
-              Темп игры на раунд
+              Время на раунд
             </legend>
-            <span className="text-xs text-muted-foreground">
-              Шахматный таймер
-            </span>
+            <span className="text-xs text-muted-foreground"></span>
           </div>
 
           <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
@@ -320,12 +360,11 @@ export function CreateRoomForm({
                       ? 'border-primary bg-secondary text-primary font-bold ring-1 ring-primary/40 shadow-sm'
                       : 'border-border/60 bg-secondary/50 text-foreground hover:border-zinc-700 hover:bg-secondary'
                   }`}
-                  title={preset.description}
+                  title={`${preset.seconds} секунд на раунд`}
                 >
                   <Icon className="size-4 mb-1" />
-                  <span className="text-xs font-extrabold">{preset.name}</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {preset.seconds}с
+                  <span className="text-xs font-semibold">
+                    {preset.seconds} с
                   </span>
                 </button>
               );
@@ -386,7 +425,7 @@ export function CreateRoomForm({
             <Input
               id="player-nickname"
               className="h-11 rounded-2xl border-border/60 bg-secondary/70 pl-3 pr-20 text-sm focus:border-primary text-white"
-              placeholder={format === 'solo' ? 'Киноман' : 'Капитан'}
+              placeholder={format === 'solo' ? 'Киноман' : 'Игрок'}
               maxLength={24}
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
@@ -440,7 +479,7 @@ export function CreateRoomForm({
           </span>
           <span>·</span>
           <span className="rounded-md bg-secondary px-2 py-0.5 font-medium text-foreground">
-            {selectedPreset.name} ({roundSeconds}с)
+            {roundSeconds} с
           </span>
           <span>·</span>
           <span className="rounded-md bg-secondary px-2 py-0.5 font-medium text-primary">
@@ -450,7 +489,7 @@ export function CreateRoomForm({
 
         <Button
           size="lg"
-          className="w-full sm:w-auto min-w-56 h-13 rounded-2xl text-base font-bold bg-primary text-white hover:brightness-110 shadow-lg shadow-primary/20 active:scale-[0.98] transition-all"
+          className="w-full sm:w-auto min-w-56 h-13 rounded-2xl text-base font-bold bg-primary text-primary-foreground hover:brightness-110 shadow-sm active:scale-[0.98] transition-all"
           disabled={mutation.isPending}
         >
           {mutation.isPending ? (

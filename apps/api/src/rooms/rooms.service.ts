@@ -28,6 +28,8 @@ type Player = {
   sockets: Set<string>;
 };
 type Room = {
+  name: string;
+  answerMode: 'search' | 'choices';
   visibility: 'public' | 'private';
   quick?: boolean;
   quickCapacity?: number;
@@ -129,6 +131,8 @@ export class RoomsService {
       input.source ?? r.source,
       input.collection ?? r.collection,
     );
+    if (input.name) r.name = input.name;
+    if (input.answerMode) r.answerMode = input.answerMode;
     r.collection = input.collection ?? r.collection;
     r.category = input.category;
     r.mode = input.mode;
@@ -175,6 +179,8 @@ export class RoomsService {
       Date.now(),
       r.roundSeconds * 1000,
       r.format === 'solo' ? 1000 : 3000,
+      r.answerMode,
+      this.catalog.options?.(r.category, r.source) ?? [],
     );
     for (const p of r.players) p.ready = false;
     r.revision++;
@@ -311,6 +317,7 @@ export class RoomsService {
       )
       .map((r) => ({
         code: r.code,
+        name: r.name,
         host: r.players.find((p) => p.id === r.hostId)?.nickname ?? 'Игрок',
         players: r.players.length,
         capacity: 8,
@@ -349,6 +356,8 @@ export class RoomsService {
     } while (this.rooms.has(code));
     const room: Room = {
       code,
+      name: input.name ?? `Комната ${input.nickname}`,
+      answerMode: input.answerMode ?? 'search',
       visibility: input.visibility ?? 'private',
       format: input.format ?? 'party',
       collection: input.collection ?? 'all',
@@ -438,6 +447,8 @@ export class RoomsService {
   snapshot(code: string, token?: string): RoomSnapshot {
     const r = this.room(code);
     return {
+      name: r.name,
+      answerMode: r.answerMode,
       code: r.code,
       format: r.format,
       collection: r.collection,
@@ -497,6 +508,9 @@ export class RoomsService {
         r.players,
         Date.now(),
         r.roundSeconds * 1000,
+        3000,
+        r.answerMode,
+        this.catalog.options?.(r.category, r.source) ?? [],
       );
     if (r.format === 'solo' && !r.match) this.start(code, token);
     r.revision++;

@@ -1,12 +1,17 @@
+'use client';
+import { m } from '@/components/motion-system';
+import type { HTMLMotionProps } from 'motion/react';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-function Card({ className, ...props }: React.ComponentProps<'div'>) {
+function Card({ className, ...props }: HTMLMotionProps<'div'>) {
   return (
-    <div
+    <m.div
+      initial={{ opacity: 0.8 }}
+      animate={{ opacity: 1 }}
       data-slot="card"
       className={cn(
-        'flex flex-col gap-6 rounded-xl border bg-card py-6 text-card-foreground shadow-sm',
+        'surface-panel flex flex-col gap-4 rounded-2xl border bg-card py-5 text-card-foreground',
         className,
       )}
       {...props}

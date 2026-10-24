@@ -1,4 +1,14 @@
 'use client';
+import { SectionSkeleton } from './section-skeleton';
+import {
+  Film,
+  ScanSearch,
+  Grid2X2,
+  Shuffle,
+  TextCursorInput,
+  ListChecks,
+  Play,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -22,6 +32,7 @@ export function SoloLaunch({
   initialCollection: NonNullable<CreateRoom['collection']>;
 }) {
   const router = useRouter();
+  const [answerMode, setAnswerMode] = useState<'search' | 'choices'>('search');
   const [mode, setMode] = useState(initialMode);
   const account = useQuery({
     queryKey: ['account'],
@@ -36,6 +47,7 @@ export function SoloLaunch({
       api<RoomSession>('rooms', 'POST', {
         nickname: account.data?.account?.nickname || 'Киноман',
         format: 'solo',
+        answerMode,
         source:
           (availability.data?.categories.find(
             (c) => c.category === initialCategory,
@@ -53,26 +65,62 @@ export function SoloLaunch({
       router.push('/room/' + s.code);
     },
   });
+  if (availability.isPending) return <SectionSkeleton kind="form" />;
   return (
-    <div className="space-y-5">
-      <section className="rounded-3xl border bg-card p-6">
+    <div className="solo-launch space-y-4">
+      <section className="rounded-2xl border surface-panel bg-card p-6">
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {Object.entries(modeLabels).map(([id, label]) => (
+          {Object.entries(modeLabels).map(([id, label]) => {
+            const Icon = {
+              frames: Film,
+              spotlight: ScanSearch,
+              pixels: Grid2X2,
+              mix: Shuffle,
+            }[id as CreateRoom['mode']];
+            const description = {
+              frames: 'Узнать по сценам',
+              spotlight: 'Открывать постер',
+              pixels: 'Прояснять изображение',
+              mix: 'Чередовать подсказки',
+            }[id as CreateRoom['mode']];
+            return (
+              <Button
+                key={id}
+                className="solo-mode-option"
+                variant={mode === id ? 'default' : 'outline'}
+                aria-pressed={mode === id}
+                onClick={() => setMode(id as CreateRoom['mode'])}
+              >
+                <Icon size={23} aria-hidden="true" />
+                <span className="solo-mode-name">{label}</span>
+                <span className="solo-mode-description">{description}</span>
+              </Button>
+            );
+          })}
+        </div>
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          {(['search', 'choices'] as const).map((value) => (
             <Button
-              key={id}
-              variant={mode === id ? 'default' : 'outline'}
-              aria-pressed={mode === id}
-              onClick={() => setMode(id as CreateRoom['mode'])}
+              key={value}
+              aria-pressed={answerMode === value}
+              variant={answerMode === value ? 'default' : 'outline'}
+              onClick={() => setAnswerMode(value)}
             >
-              {label}
+              {value === 'search' ? (
+                <TextCursorInput aria-hidden="true" />
+              ) : (
+                <ListChecks aria-hidden="true" />
+              )}
+              {value === 'search' ? 'Ввод названия' : 'Выбор из 4'}
             </Button>
           ))}
         </div>
         <Button
-          className="h-14 w-full text-lg"
+          className="h-12 w-full text-base"
           disabled={play.isPending || availability.isPending}
           onClick={() => play.mutate()}
         >
+          <Play aria-hidden="true" />
           {play.isPending ? 'Начинаем…' : 'Играть'}
         </Button>
         {play.error && (

@@ -1,6 +1,7 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
+import { ArrowRight, CalendarDays, LoaderCircle } from 'lucide-react';
 import type { RoomSession } from '@filmless/contracts';
 import { api } from '@/lib/account';
 import { saveSession } from '@/lib/rooms';
@@ -15,34 +16,38 @@ export function DailyFilm() {
     },
   });
   return (
-    <section className="rounded-3xl border border-border/70 bg-card p-6">
-      <div className="flex items-center justify-between">
-        <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold text-primary">
-          Фильм дня
-        </span>
-        <span className="text-xs text-muted-foreground">Ежедневно</span>
+    <section className="home-daily" aria-labelledby="daily-title">
+      <span className="home-row-icon">
+        <CalendarDays size={21} aria-hidden="true" />
+      </span>
+      <div className="home-row-copy">
+        <h2 id="daily-title">
+          Фильм дня<span className="home-daily-tag">Каждый день новый</span>
+        </h2>
+        <p>Одна загадка для всех. Без регистрации.</p>
       </div>
-      <h2 className="mt-3 text-xl font-bold text-white">
-        Один день. Одна загадка.
-      </h2>
-      <p className="my-3 text-xs leading-relaxed text-muted-foreground">
-        Общий фильм для всех. 5 кадров и 45 секунд, чтобы вспомнить название.
-      </p>
       <Button
-        className="w-full rounded-2xl bg-primary text-white font-bold h-12 shadow-md shadow-primary/20 hover:brightness-110 active:scale-95"
+        className="home-daily-button"
         disabled={play.isPending}
         onClick={() => play.mutate()}
       >
-        {play.isPending ? 'Открываем…' : 'Угадать фильм дня'}
+        {play.isPending ? (
+          <>
+            <LoaderCircle className="animate-spin" aria-hidden="true" />
+            Открываем…
+          </>
+        ) : (
+          <>
+            Угадать
+            <ArrowRight aria-hidden="true" />
+          </>
+        )}
       </Button>
       {play.error && (
-        <p role="alert" className="mt-3 text-xs text-destructive">
+        <p role="alert" className="home-daily-error">
           {play.error.message}
         </p>
       )}
-      <p className="mt-3 text-[11px] text-muted-foreground text-center">
-        Без регистрации · обновляется в полночь
-      </p>
     </section>
   );
 }

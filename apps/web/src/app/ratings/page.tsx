@@ -1,5 +1,7 @@
 'use client';
+import { SectionSkeleton } from '@/components/section-skeleton';
 import Link from 'next/link';
+import { m } from '@/components/motion-system';
 import { Trophy, Swords } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/account';
@@ -23,7 +25,7 @@ export default function RatingsPage() {
   });
   const me = query.data?.me;
   return (
-    <main className="mx-auto max-w-7xl px-3 py-5 sm:px-5 md:py-8">
+    <main className="screen screen--ratings mx-auto max-w-7xl px-3 py-5 sm:px-5 md:py-8">
       <div className="mb-5 flex items-center gap-3">
         <Trophy className="size-7 text-primary" />
         <div>
@@ -34,7 +36,7 @@ export default function RatingsPage() {
         </div>
       </div>
       <div className="grid items-start gap-5 md:grid-cols-[240px_minmax(0,1fr)] lg:grid-cols-[270px_minmax(0,1fr)]">
-        <aside className="cinema-panel rounded-3xl border p-5 md:sticky md:top-5">
+        <aside className="cinema-panel rounded-2xl border p-5 md:sticky md:top-5">
           <div className="flex items-center gap-4 md:flex-col md:text-center">
             <Avatar
               src={me?.avatarUrl}
@@ -83,7 +85,7 @@ export default function RatingsPage() {
           )}
         </aside>
         <section
-          className="min-w-0 rounded-3xl border bg-card/50 p-2 sm:p-3"
+          className="min-w-0 rounded-2xl border bg-card/50 p-2 sm:p-3"
           aria-label="Таблица рейтинга"
         >
           <div className="mb-3 flex items-center justify-between gap-3 rounded-2xl bg-secondary/60 px-4 py-3">
@@ -97,9 +99,7 @@ export default function RatingsPage() {
           </div>
           <div className="md:max-h-[calc(100dvh-265px)] md:overflow-y-auto md:pr-1">
             {query.isPending ? (
-              <p role="status" className="p-6">
-                Загружаем игроков…
-              </p>
+              <SectionSkeleton />
             ) : query.error ? (
               <p role="alert" className="p-6">
                 Рейтинг временно недоступен.
@@ -115,7 +115,9 @@ export default function RatingsPage() {
             ) : (
               <ol className="space-y-2">
                 {query.data.players.map((p, i) => (
-                  <li
+                  <m.li
+                    initial={{ opacity: 0.7, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
                     key={p.id}
                     className={`rating-row flex min-h-20 items-center gap-3 rounded-2xl border px-3 py-3 sm:gap-4 sm:px-5 ${p.id === me?.id ? 'border-primary ring-1 ring-primary/40' : 'border-border/60'} ${i < 3 ? 'bg-secondary' : 'bg-card/40'}`}
                   >
@@ -150,7 +152,7 @@ export default function RatingsPage() {
                         рейтинг
                       </p>
                     </div>
-                  </li>
+                  </m.li>
                 ))}
               </ol>
             )}

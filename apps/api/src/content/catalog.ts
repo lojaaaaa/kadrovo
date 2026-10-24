@@ -2,7 +2,7 @@ import type { Response } from 'express';
 import { CatalogRotation } from './rotation';
 import { allowedImageUrl } from './images';
 import { localContentPreview } from './approval';
-import { pixelImage } from './pixels';
+import { pixelImage, pixelVersion } from './pixels';
 import { collectionDefinitions, type CollectionId } from '@filmless/contracts';
 import { approvalWhere } from './approval';
 import {
@@ -30,6 +30,10 @@ import { CatalogStore } from './store';
 import { searchEntry, searchTitles, type SearchEntry } from '../game/search';
 import { contentDirectory } from './publish';
 export interface GameCatalog {
+  options?(
+    category: CreateRoom['category'],
+    source?: 'demo' | 'catalog',
+  ): TitleOption[];
   validate?(
     category: CreateRoom['category'],
     mode?: CreateRoom['mode'],
@@ -238,7 +242,11 @@ export class ContentCatalog
           q[p.mode] = images;
           if (p.mode === 'frames')
             q.pixels = [0, 1, 2, 3, 4].map((stage) =>
-              register(p.stageFiles[0]!, p.updatedAt.toISOString(), stage),
+              register(
+                p.stageFiles[0]!,
+                `${p.updatedAt.toISOString()}:${pixelVersion}`,
+                stage,
+              ),
             );
           byTitle.set(p.titleId, q);
         } catch {
@@ -420,6 +428,14 @@ export class ContentCatalog
     const result = this.rotation.pick(deck, total);
     this.scheduleRotation();
     return result;
+  }
+  options(
+    category: CreateRoom['category'],
+    source: 'demo' | 'catalog' = 'catalog',
+  ) {
+    return source === 'demo'
+      ? this.demo.options(category)
+      : this.titles.map((t) => t.option).filter((t) => t.category === category);
   }
   search(
     category: CreateRoom['category'],

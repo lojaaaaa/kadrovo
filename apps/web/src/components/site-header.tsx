@@ -1,4 +1,5 @@
 'use client';
+import { Skeleton } from './ui/skeleton';
 import { Avatar } from './avatar';
 import { Aperture } from 'lucide-react';
 import Link from 'next/link';
@@ -6,6 +7,7 @@ import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { api, type AccountState } from '@/lib/account';
 import { SoundControls } from './sound-controls';
+import { m } from './motion-system';
 export function SiteHeader() {
   const path = usePathname();
   const inRoom = path.startsWith('/room/');
@@ -14,21 +16,17 @@ export function SiteHeader() {
     queryFn: () => api<AccountState>('auth/me'),
   });
   return (
-    <header className="border-b border-white/5 bg-background/75 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:px-5 md:px-8">
-        <Link
-          href="/"
-          aria-label="Кадрово — главная"
-          className="mr-auto flex items-center gap-2 text-xl font-bold tracking-tight"
-        >
-          <Aperture className="size-7 text-primary" />
+    <header className="site-shell">
+      <div className="site-shell-bar">
+        <Link href="/" aria-label="Кадрово — главная" className="site-wordmark">
+          <Aperture size={26} aria-hidden="true" />
           <span>
-            кадрово<span className="text-primary">.</span>
+            кадрово<span className="site-brand-dot">.</span>
           </span>
         </Link>
         <nav
           aria-label="Основная навигация"
-          className={`${inRoom ? 'hidden xl:flex' : 'flex'} order-3 w-full gap-1 overflow-x-auto xl:order-none xl:w-auto`}
+          className={`site-navigation ${inRoom ? 'site-navigation--playing' : ''}`}
         >
           {[
             { href: '/', label: 'Главная' },
@@ -39,31 +37,50 @@ export function SiteHeader() {
               key={item.href}
               href={item.href}
               aria-current={path === item.href ? 'page' : undefined}
-              className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${path === item.href ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
+              className="site-navigation-link"
             >
-              {item.label}
+              {path === item.href && (
+                <m.span
+                  className="site-navigation-active"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  aria-hidden="true"
+                />
+              )}
+              <span>{item.label}</span>
             </Link>
           ))}
         </nav>
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="site-shell-actions">
           <SoundControls />
-          <Link
-            href={account.data?.account ? '/profile' : '/account'}
-            className="flex max-w-40 items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold hover:border-primary"
-          >
-            {account.data?.account && (
-              <Avatar
-                src={account.data.account.avatarUrl}
-                name={account.data.account.nickname}
-                className="size-7 text-xs"
-              />
-            )}
-            <span
-              className={`${inRoom ? 'hidden sm:inline' : 'inline'} max-w-24 truncate`}
+          {account.isPending ? (
+            <Skeleton className="h-9 w-24" aria-label="Загрузка профиля" />
+          ) : (
+            <Link
+              href={account.data?.account ? '/profile' : '/account'}
+              aria-label={
+                account.data?.account
+                  ? `Профиль ${account.data.account.nickname}`
+                  : 'Войти'
+              }
+              className="site-profile-link"
             >
-              {account.data?.account?.nickname ?? 'Войти'}
-            </span>
-          </Link>
+              {account.data?.account && (
+                <Avatar
+                  src={account.data.account.avatarUrl}
+                  name={account.data.account.nickname}
+                  className="size-7 text-xs"
+                />
+              )}
+              <span
+                className={
+                  inRoom && account.data?.account ? 'hidden sm:inline' : ''
+                }
+              >
+                {account.data?.account?.nickname ?? 'Войти'}
+              </span>
+            </Link>
+          )}
         </div>
       </div>
     </header>
