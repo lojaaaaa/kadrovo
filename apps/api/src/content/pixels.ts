@@ -1,6 +1,6 @@
 import sharp from 'sharp';
-export const pixelWidths = [24, 48, 96, 192, 960] as const;
-export const pixelVersion = 'pixels-v2';
+export const pixelWidths = [48, 80, 144, 288, 960] as const;
+export const pixelVersion = 'pixels-v3';
 async function prepare(image: Buffer) {
   return sharp(image).rotate().png().toBuffer({ resolveWithObject: true });
 }

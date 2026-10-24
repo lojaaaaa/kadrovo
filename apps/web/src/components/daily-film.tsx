@@ -9,6 +9,7 @@ import type { RoomSession } from '@filmless/contracts';
 import { api } from '@/lib/account';
 import { saveSession } from '@/lib/rooms';
 import { Button } from './ui/button';
+import { Skeleton } from './ui/skeleton';
 export function DailyFilm() {
   const router = useRouter();
   const client = useQueryClient();
@@ -16,7 +17,7 @@ export function DailyFilm() {
   const progress = useQuery({
     queryKey: ['experience'],
     queryFn: () => api<ExperienceSummary>('experience'),
-    staleTime: 0,
+    staleTime: 5000,
   });
   const daily = progress.data?.currentDaily;
   const completed = progress.data?.daily.find((d) => d.day === daily?.day);
@@ -43,6 +44,30 @@ export function DailyFilm() {
       router.push(`/room/${session.code}`);
     },
   });
+  if (progress.isPending || progress.isFetching)
+    return (
+      <section
+        className="home-daily"
+        aria-label="Загрузка фильма дня"
+        aria-busy="true"
+      >
+        <Skeleton className="size-10 shrink-0 rounded-xl" />
+        <div className="home-row-copy space-y-2">
+          <Skeleton className="h-5 w-36" />
+          <Skeleton className="h-4 w-56 max-w-full" />
+        </div>
+        <Skeleton className="h-11 w-36 rounded-xl" />
+      </section>
+    );
+  if (progress.error)
+    return (
+      <section className="home-daily">
+        <p role="alert">Не удалось загрузить фильм дня.</p>
+        <Button variant="outline" onClick={() => void progress.refetch()}>
+          Повторить
+        </Button>
+      </section>
+    );
   return (
     <section className="home-daily" aria-labelledby="daily-title">
       <span className="home-row-icon">

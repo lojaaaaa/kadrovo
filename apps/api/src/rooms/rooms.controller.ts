@@ -1,8 +1,10 @@
+import { sameOrigin, RateLimit } from '../auth/security';
 import type { Request, Response } from 'express';
 import { ExperienceService } from './experience.service';
 import { interval, map, startWith, distinctUntilChanged } from 'rxjs';
 import {
   BadRequestException,
+  ForbiddenException,
   Body,
   Controller,
   Inject,
@@ -19,6 +21,11 @@ import { RoomsService } from './rooms.service';
 import { RoomsGateway } from './rooms.gateway';
 @Controller('rooms')
 export class RoomsController {
+  private limits = new RateLimit();
+  private guard(req: Request) {
+    sameOrigin(req);
+    this.limits.take(req.ip ?? 'unknown', 40, 60000);
+  }
   constructor(
     @Inject(ExperienceService) private readonly experience: ExperienceService,
     @Inject(ContentCatalog) private readonly catalog: ContentCatalog,
@@ -43,6 +50,7 @@ export class RoomsController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.guard(req);
     try {
       const { day, question } = await this.catalog.daily();
       return {
@@ -65,13 +73,27 @@ export class RoomsController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.guard(req);
     const input = createRoomSchema.safeParse(body);
     if (!input.success)
       throw new BadRequestException('Проверьте ник, категорию и режим.');
-    return this.rooms.create(
-      input.data,
-      await this.experience.identity(req, res),
+    const subject = await this.experience.identity(req, res);
+    if (
+      subject.startsWith('guest:') &&
+      input.data.format !== 'solo' &&
+      input.data.visibility === 'public'
+    )
+      throw new ForbiddenException({
+        code: 'ACCOUNT_REQUIRED',
+        message:
+          'Для создания открытой комнаты войдите в аккаунт. Закрытая комната доступна без регистрации.',
+        loginUrl: '/account?reason=create-lobby',
+      });
+    this.experience.assertTrial(
+      subject,
+      input.data.format === 'solo' ? 'solo' : 'online',
     );
+    return this.rooms.create(input.data, subject);
   }
   @Post(':code/join') async join(
     @Param('code') code: string,
@@ -79,14 +101,13 @@ export class RoomsController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
+    this.guard(req);
     const input = joinRoomSchema.safeParse(body);
     if (!input.success || !/^[A-F0-9]{8}$/.test(code))
       throw new BadRequestException('Проверьте код комнаты и ник.');
-    const session = this.rooms.join(
-      code,
-      input.data.nickname,
-      await this.experience.identity(req, res),
-    );
+    const subject = await this.experience.identity(req, res);
+    this.experience.assertTrial(subject, 'online');
+    const session = this.rooms.join(code, input.data.nickname, subject);
     this.gateway.publish(code);
     return session;
   }

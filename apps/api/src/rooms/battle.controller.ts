@@ -29,11 +29,20 @@ export class BattleController {
     this.limits.take(account.id, 120, 60_000);
     return account;
   }
+  private async quickActor(req: Request, res: Response) {
+    res.setHeader('Cache-Control', 'no-store');
+    this.limits.take('ip:' + req.ip, 180, 60000);
+    const subject = await this.experience.identity(req, res);
+    const account = await this.auth.session(cookie(req, 'filmless_session'));
+    return account
+      ? { id: account.id, nickname: account.nickname, subject }
+      : { id: subject, nickname: 'Гость ' + subject.slice(-4), subject };
+  }
   @Get('quick') async quickStatus(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    return this.battle.quickStatus((await this.account(req, res)).id);
+    return this.battle.quickStatus((await this.quickActor(req, res)).id);
   }
   @Post('quick') async quickJoin(
     @Body() body: { kind?: string },
@@ -43,14 +52,16 @@ export class BattleController {
     sameOrigin(req);
     if (body?.kind !== 'duel' && body?.kind !== 'group')
       throw new BadRequestException('Выберите режим.');
-    return this.battle.quickJoin(await this.account(req, res), body.kind);
+    const actor = await this.quickActor(req, res);
+    this.experience.assertTrial(actor.subject, 'online');
+    return this.battle.quickJoin(actor, body.kind);
   }
   @Delete('quick') async quickCancel(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     sameOrigin(req);
-    return this.battle.quickCancel((await this.account(req, res)).id);
+    return this.battle.quickCancel((await this.quickActor(req, res)).id);
   }
   @Get() async status(
     @Req() req: Request,

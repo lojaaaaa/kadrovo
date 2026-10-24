@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { MotionSystem, ScreenTransition } from '@/components/motion-system';
 import { BackNavigation } from '@/components/back-navigation';
 import { QueueResume } from '@/components/queue-resume';
+import { AccessRedirect } from '@/components/access-redirect';
 import { SiteHeader } from '@/components/site-header';
 export function Providers({ children }: { children: React.ReactNode }) {
   const [client] = useState(
@@ -15,6 +16,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={client}>
       <MotionSystem>
+        <AccessRedirect />
         <SiteHeader />
         <QueueResume />
         <ScreenTransition>

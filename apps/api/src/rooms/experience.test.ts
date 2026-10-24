@@ -116,3 +116,81 @@ it('reports daily state without leaking the saved session and rolls over at Mosc
     vi.useRealTimers();
   }
 });
+
+it('persists independent guest allowances and counts each actual match only once', async () => {
+  const f = setup();
+  const service = new ExperienceService(f.store, f.auth);
+  const subject = await service.identity(f.req, f.res);
+  for (let i = 0; i < 5; i++) service.useTrial(subject, 'solo', 'solo-' + i);
+  service.useTrial(subject, 'solo', 'solo-0');
+  expect(service.summary(subject).access).toMatchObject({
+    guest: true,
+    soloRemaining: 0,
+    onlineRemaining: 3,
+  });
+  expect(() => service.assertTrial(subject, 'solo')).toThrow('Гостевые игры');
+  for (let i = 0; i < 3; i++)
+    service.useTrial(subject, 'online', 'online-' + i);
+  expect(() => service.useTrial(subject, 'online', 'fourth')).toThrow(
+    'Гостевые игры',
+  );
+  expect(() => service.assertTrial('account:signed-in', 'solo')).not.toThrow();
+  await service.onModuleDestroy();
+  const restored = new ExperienceService(f.store, f.auth);
+  await restored.identity(f.req, f.res);
+  expect(restored.summary(subject).access).toMatchObject({
+    soloRemaining: 0,
+    onlineRemaining: 0,
+  });
+  expect(() => restored.useTrial(subject, 'solo', 'sixth')).toThrow();
+  await restored.onModuleDestroy();
+});
+
+it('does not charge waiting, cancellation or reconnects; charges both guests when a match really starts', async () => {
+  const { RoomsService } = await import('./rooms.service');
+  const { BattleService } = await import('./battle.service');
+  const f = setup();
+  const experience = new ExperienceService(f.store, f.auth);
+  const one = await experience.identity(f.req, f.res);
+  const two = await experience.identity(
+    { headers: { cookie: 'kadrovo_guest=' + 'b'.repeat(64) } } as Request,
+    f.res,
+  );
+  const question = {
+    title: {
+      id: 'film',
+      name: 'Film',
+      year: 2000,
+      category: 'movies' as const,
+    },
+    frames: Array(5).fill('image'),
+    spotlight: Array(5).fill('poster'),
+  };
+  const rooms = new RoomsService(
+    { deck: () => [question], search: () => [], has: () => true },
+    undefined,
+    experience,
+  );
+  const queue = new BattleService(rooms);
+  const a = { id: one, subject: one, nickname: 'One' },
+    b = { id: two, subject: two, nickname: 'Two' };
+  queue.quickJoin(a, 'duel');
+  expect(experience.summary(one).access.onlineRemaining).toBe(3);
+  queue.quickCancel(one);
+  expect(experience.summary(one).access.onlineRemaining).toBe(3);
+  queue.quickJoin(a, 'duel');
+  queue.quickJoin(b, 'duel');
+  const sa = queue.quickStatus(one),
+    sb = queue.quickStatus(two);
+  if (!('session' in sa) || !sa.session || !('session' in sb) || !sb.session)
+    throw new Error('Not matched');
+  rooms.connect(sa.session.code, sa.session.token, 'one');
+  expect(experience.summary(one).access.onlineRemaining).toBe(3);
+  rooms.connect(sb.session.code, sb.session.token, 'two');
+  expect(experience.summary(one).access.onlineRemaining).toBe(2);
+  expect(experience.summary(two).access.onlineRemaining).toBe(2);
+  rooms.disconnect(sa.session.code, 'one');
+  rooms.connect(sa.session.code, sa.session.token, 'one-reconnected');
+  expect(experience.summary(one).access.onlineRemaining).toBe(2);
+  await experience.onModuleDestroy();
+});

@@ -29,9 +29,9 @@ export function ScreenTransition({ children }: { children: React.ReactNode }) {
     <m.div
       className="screen-transition"
       key={path}
-      initial={{ opacity: 0.85, y: reduced ? 0 : 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: reduced ? 0 : 0.28 }}
+      initial={{ opacity: reduced ? 1 : 0.92 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: reduced ? 0 : 0.18 }}
     >
       {children}
     </m.div>

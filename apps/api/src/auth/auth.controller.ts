@@ -1,4 +1,10 @@
 import {
+  emailInput,
+  passwordInput,
+  registrationInput,
+  nicknameInput,
+} from '@filmless/contracts';
+import {
   BadRequestException,
   NotFoundException,
   Body,
@@ -22,18 +28,15 @@ import {
   setCookie,
   webOrigin,
 } from './security';
-const email = z
-  .email()
-  .max(254)
-  .transform((v) => v.trim().toLowerCase());
-const password = z.string().min(10).max(128);
+const email = emailInput;
+const password = passwordInput;
 const credentials = z.object({ email, password });
 const token = z.string().regex(/^[a-f0-9]{64}$/);
 const parse = <T>(schema: z.ZodType<T>, input: unknown): T => {
   const result = schema.safeParse(input);
   if (!result.success)
     throw new BadRequestException(
-      'Проверьте поля. Пароль — от 10 до 128 символов.',
+      result.error.issues[0]?.message ?? 'Проверьте поля.',
     );
   return result.data;
 };
@@ -66,12 +69,10 @@ export class AuthController {
   ) {
     this.guard(req, res);
     const account = await this.auth.require(cookie(req, 'filmless_session'));
-    const input = z
-      .object({ nickname: z.string().trim().min(1).max(24) })
-      .safeParse(body);
+    const input = z.object({ nickname: nicknameInput }).safeParse(body);
     if (!input.success)
       throw new BadRequestException(
-        'Ник должен содержать от 1 до 24 символов.',
+        input.error.issues[0]?.message ?? 'Проверьте ник.',
       );
     return {
       account: await this.auth.updateProfile(account.id, input.data.nickname),
@@ -113,12 +114,18 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     this.guard(req, res);
-    const data = parse(
-      credentials.extend({ nickname: z.string().trim().min(1).max(24) }),
-      body,
-    );
+    const data = parse(registrationInput, body);
     this.limits.take(`mail:${data.email}`, 3);
-    return this.auth.register(data.email, data.password, data.nickname);
+    const result = await this.auth.register(
+      data.email,
+      data.password,
+      data.nickname,
+    );
+    if ('token' in result) {
+      setCookie(res, 'filmless_session', result.token, 30 * 86400_000);
+      return { account: result.account };
+    }
+    return result;
   }
   @Post('login') async login(
     @Body() body: unknown,

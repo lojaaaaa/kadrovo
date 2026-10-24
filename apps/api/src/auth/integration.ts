@@ -293,8 +293,40 @@ async function main() {
       if (savedSecret === undefined) delete process.env.YANDEX_CLIENT_SECRET;
       else process.env.YANDEX_CLIENT_SECRET = savedSecret;
     }
+    process.env.EMAIL_VERIFICATION_REQUIRED = 'false';
+    const registered = await auth.register(
+      'new@example.invalid',
+      'a long test password',
+      'Новый игрок',
+    );
+    assert('token' in registered);
+    assert.equal(
+      (await auth.session(registered.token))?.nickname,
+      'Новый игрок',
+    );
+    await assert.rejects(
+      auth.register('new@example.invalid', 'other long password', 'Другой ник'),
+      /уже зарегистрирована/,
+    );
+    const competing = await Promise.allSettled([
+      auth.register(
+        'nick-a@example.invalid',
+        'a long test password',
+        'Свободный ник',
+      ),
+      auth.register(
+        'nick-b@example.invalid',
+        'a long test password',
+        'свободный ник',
+      ),
+    ]);
+    assert.equal(competing.filter((r) => r.status === 'fulfilled').length, 1);
+    await assert.rejects(
+      auth.updateProfile(account.id, 'НОВЫЙ ИГРОК'),
+      /ник уже занят/,
+    );
     console.log(
-      'Auth integration passed: avatar normalization/persistence/removal, rating transactions, verification race, password binding, reset expiry/replay, session revocation, logout, OAuth state/PKCE/identity (mock provider).',
+      'Auth integration passed: auto-login, duplicate email, concurrent case-insensitive nickname registration/profile conflict; avatar normalization/persistence/removal, rating transactions, verification race, password binding, reset expiry/replay, session revocation, logout, OAuth state/PKCE/identity (mock provider).',
     );
   } finally {
     auth.onModuleDestroy();

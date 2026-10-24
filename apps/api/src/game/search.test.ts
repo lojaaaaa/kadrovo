@@ -36,7 +36,7 @@ describe('title search', () => {
       ['5'],
     );
   });
-  it('ranks exact then prefix then substring then fuzzy matches', () => {
+  it('ranks direct matches and does not fill a good result set with fuzzy noise', () => {
     const options = [
       entry('fuzzy', 'Матрицы'),
       entry('substring', 'Старая Матрица'),
@@ -44,7 +44,7 @@ describe('title search', () => {
       entry('exact', 'Матрица'),
     ];
     expect(searchTitles(options, 'movies', 'матрица').map((t) => t.id)).toEqual(
-      ['exact', 'prefix', 'substring', 'fuzzy'],
+      ['exact', 'prefix', 'substring'],
     );
   });
   it('deduplicates aliases and limits results to eight with stable ordering', () => {

@@ -10,7 +10,7 @@ const sockets = [];
 async function post(path, body) {
   const response = await fetch(`${base}/api/rooms${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Origin: base },
     body: JSON.stringify(body),
   });
   assert.equal(response.status, 201);
@@ -97,7 +97,11 @@ try {
     ok: true,
   });
   await transferred;
-  await b.timeout(5000).emitWithAck('room:leave');
+  assert.deepEqual(await b.timeout(5000).emitWithAck('room:leave'), {
+    ok: true,
+  });
+  const removed = await fetch(base + '/api/rooms/' + host.code);
+  assert.equal(removed.status, 404);
   console.log(
     'Room smoke passed: create, join, WebSocket, ready, reconnect, host transfer, leave.',
   );

@@ -1,25 +1,25 @@
 'use client';
+import { clearMatchmaking } from '@/lib/matchmaking';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { AccountState } from '@/lib/account';
 import { createStore, useStore } from 'zustand';
 import { io, type Socket } from 'socket.io-client';
 import {
-  categoryLabels,
-  modeLabels,
   type RoomSession,
   type RoomSnapshot,
   type RoomAck,
   type GamePersonal,
 } from '@filmless/contracts';
-import { CompanyTastes } from './company-tastes';
 import { PartyLobby } from './party-lobby';
 import { GameBoard } from './game-board';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SectionSkeleton } from './section-skeleton';
 import { roomRequest, saveSession, sessionKey } from '@/lib/rooms';
 type LobbyState = {
   session: RoomSession | null;
@@ -32,6 +32,7 @@ type LobbyState = {
 };
 export function RoomLobby({ code }: { code: string }) {
   const router = useRouter();
+  const client = useQueryClient();
   const [store] = useState(() =>
     createStore<LobbyState>(() => ({
       session: null,
@@ -85,7 +86,24 @@ export function RoomLobby({ code }: { code: string }) {
         error: 'Связь прервана. Пробуем подключиться снова…',
       }),
     );
+    socket.on('access:required', async (detail: { url: string }) => {
+      if (client.getQueryData<AccountState>(['account'])?.account) return;
+      await socket
+        .timeout(3000)
+        .emitWithAck('room:leave')
+        .catch(() => undefined);
+      try {
+        localStorage.removeItem(sessionKey(code));
+        localStorage.removeItem('kadrovo:active-room');
+      } catch {
+        /* Storage can be unavailable. */
+      }
+      window.dispatchEvent(
+        new CustomEvent('kadrovo:access-required', { detail }),
+      );
+    });
     socket.on('room:error', (message: string) => {
+      void clearMatchmaking(client);
       store.setState({ error: message, session: null, room: null });
       try {
         localStorage.removeItem(sessionKey(code));
@@ -99,6 +117,18 @@ export function RoomLobby({ code }: { code: string }) {
       store.setState({ personal }),
     );
     socket.on('room:snapshot', (snapshot: RoomSnapshot) => {
+      const previous = store.getState().room?.game;
+      if (
+        snapshot.code === code &&
+        snapshot.game &&
+        (previous?.matchId !== snapshot.game.matchId ||
+          (previous.phase !== 'finished' && snapshot.game.phase === 'finished'))
+      ) {
+        void client.invalidateQueries({ queryKey: ['experience'] });
+        void client.invalidateQueries({ queryKey: ['daily-archive'] });
+        if (snapshot.game.phase === 'finished')
+          void client.invalidateQueries({ queryKey: ['ratings'] });
+      }
       if (snapshot.code === code && snapshot.game?.phase === 'playing') {
         setViewLobby(false);
       }
@@ -113,7 +143,7 @@ export function RoomLobby({ code }: { code: string }) {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [session, code, store]);
+  }, [session, code, store, client]);
   const join = useMutation({
     mutationFn: async () => {
       const s = await roomRequest(`/${code}/join`, { nickname });
@@ -134,12 +164,6 @@ export function RoomLobby({ code }: { code: string }) {
   const active = room?.game && room.game.phase !== 'finished';
   const isFinished = room?.game?.phase === 'finished';
 
-  const allReady =
-    !!room &&
-    room.players.length >= (room.format === 'solo' ? 1 : 2) &&
-    room.players.every(
-      (p) => (room.format === 'solo' || p.ready) && p.connected,
-    );
   const me = room?.players.find((p) => p.id === session?.playerId);
   async function copyLink(kind: 'link' | 'code' = 'link') {
     try {
@@ -175,8 +199,27 @@ export function RoomLobby({ code }: { code: string }) {
         },
       );
   }
-  function leave() {
-    socketRef.current?.emit('room:leave');
+  async function leave() {
+    if (pending) return;
+    setPending(true);
+    try {
+      const socket = socketRef.current;
+      if (!socket?.connected)
+        throw new Error('Дождитесь подключения, чтобы выйти из комнаты.');
+      const ack: RoomAck = await socket.timeout(5000).emitWithAck('room:leave');
+      if (!ack.ok && ack.message !== 'Комната недоступна.')
+        throw new Error(ack.message);
+    } catch (error) {
+      setPending(false);
+      store.setState({
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Не удалось выйти. Попробуйте ещё раз.',
+      });
+      return;
+    }
+    await clearMatchmaking(client);
     try {
       localStorage.removeItem(sessionKey(code));
       localStorage.removeItem('kadrovo:active-room');
@@ -184,25 +227,14 @@ export function RoomLobby({ code }: { code: string }) {
       /* Private browsing. */
     }
     socketRef.current?.disconnect();
+    setPending(false);
     router.push('/');
   }
   return (
     <main
       className={`screen screen--room mx-auto max-w-7xl px-3 sm:px-5 ${active ? 'game-room py-2' : 'py-6'}`}
     >
-      <h1
-        className={
-          room?.game || room?.format === 'party'
-            ? 'sr-only'
-            : 'mt-3 text-3xl font-black text-white'
-        }
-      >
-        {room?.format === 'solo'
-          ? 'Одиночная игра'
-          : room?.format === 'battle'
-            ? 'Дуэль 1 на 1'
-            : 'Лобби'}
-      </h1>
+      <h1 className="sr-only">{room?.format === 'party' ? 'Лобби' : 'Игра'}</h1>
       {!loaded ? (
         <div className="mt-8 space-y-4">
           <Skeleton className="h-10 w-72 rounded-xl" />
@@ -240,13 +272,27 @@ export function RoomLobby({ code }: { code: string }) {
         </form>
       ) : (
         <>
-          {!connected && (
+          {!room && <SectionSkeleton kind="game" />}
+          {room && !connected && (
             <p className="my-1 text-xs text-muted-foreground" role="status">
               Подключаемся…
             </p>
           )}
           {room && (
             <>
+              {room.format === 'battle' &&
+                room.capacity === 2 &&
+                room.game?.phase === 'playing' &&
+                room.players.some(
+                  (p) => p.id !== session.playerId && !p.connected,
+                ) && (
+                  <p
+                    role="status"
+                    className="mb-3 text-sm text-muted-foreground"
+                  >
+                    Соперник отключился. Ждём переподключения…
+                  </p>
+                )}
               {/* 1. Active or Finished Game View */}
               {room.game && (!isFinished || !viewLobby) && (
                 <GameBoard
@@ -307,11 +353,6 @@ export function RoomLobby({ code }: { code: string }) {
                         </Button>
                       </div>
                     )}
-                    <CompanyTastes
-                      room={room}
-                      session={session}
-                      getSocket={() => socketRef.current}
-                    />
                     <PartyLobby
                       room={room}
                       session={session}
@@ -328,50 +369,19 @@ export function RoomLobby({ code }: { code: string }) {
                   </div>
                 )}
 
-              {/* 3. Solo / Battle Pre-game (before game has started) */}
               {!room.game && room.format !== 'party' && (
-                <div className="space-y-6">
-                  <div className="flex flex-wrap gap-2.5 text-sm">
-                    <span className="rounded-xl border border-border/60 bg-secondary px-4 py-2 font-semibold text-white">
-                      {categoryLabels[room.category]}
-                    </span>
-                    <span className="rounded-xl border border-border/60 bg-secondary px-4 py-2 font-semibold text-white">
-                      {modeLabels[room.mode]} · {room.roundSeconds} с
-                    </span>
-                    <span className="rounded-xl border border-border/60 bg-secondary px-4 py-2 font-semibold text-primary">
-                      {room.source === 'catalog' ? 'Кинокаталог' : 'Демо'}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    {room.hostId === session.playerId && (
-                      <Button
-                        size="lg"
-                        className="rounded-2xl bg-primary text-primary-foreground font-bold h-13 px-7 shadow-sm hover:brightness-110 active:scale-95"
-                        onClick={() => start.mutate()}
-                        disabled={!allReady || !connected || start.isPending}
-                      >
-                        {start.isPending ? 'Запускаем…' : 'Начать тренировку'}
-                      </Button>
-                    )}
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      className="rounded-2xl h-13 px-6 border-border/70 text-muted-foreground hover:text-white"
-                      onClick={leave}
-                      disabled={!connected || pending}
-                    >
-                      Выйти
-                    </Button>
-                  </div>
-                </div>
+                <SectionSkeleton kind="game" />
               )}
               {start.error && (
                 <p role="alert" className="text-destructive">
                   {start.error.message}
                 </p>
               )}
-              {room.format === 'battle' && !active && (
-                <Link href="/battle" className="mt-5 block text-primary">
+              {room.format === 'battle' && isFinished && (
+                <Link
+                  href={room.ranked ? '/battle' : '/online'}
+                  className="mt-5 block text-primary"
+                >
                   К поиску соперника →
                 </Link>
               )}

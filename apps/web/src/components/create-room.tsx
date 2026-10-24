@@ -1,8 +1,10 @@
 'use client';
 
+import { SectionSkeleton } from './section-skeleton';
+import { AnswerChoice } from './answer-choice';
 import { TastePicker } from './taste-picker';
 import { HelpTip } from './ui/help-tip';
-import { TextCursorInput, ListChecks, LockKeyhole, Globe2 } from 'lucide-react';
+import { LockKeyhole, Globe2 } from 'lucide-react';
 import { CollectionPicker } from './collection-picker';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -82,8 +84,10 @@ export function CreateRoomForm({
   initialMode = 'frames',
   initialCollection = 'all',
   initialCategory = 'movies',
+  initialAnswerMode = 'search',
 }: {
   initialFormat?: 'party' | 'solo';
+  initialAnswerMode?: 'search' | 'choices';
   initialMode?: CreateRoom['mode'];
   initialCollection?: NonNullable<CreateRoom['collection']>;
   initialCategory?: CreateRoom['category'];
@@ -98,7 +102,9 @@ export function CreateRoomForm({
   const [sharedAnswer, setSharedAnswer] = useState(false);
   const [tastes, setTastes] = useState<NonNullable<CreateRoom['tastes']>>([]);
   const [roomName, setRoomName] = useState('');
-  const [answerMode, setAnswerMode] = useState<'search' | 'choices'>('search');
+  const [answerMode, setAnswerMode] = useState<'search' | 'choices'>(
+    initialAnswerMode,
+  );
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [totalRounds, setTotalRounds] = useState<RoundCount>(5);
   const [roundSeconds, setRoundSeconds] = useState<15 | 30 | 45 | 60 | 90>(45);
@@ -152,6 +158,8 @@ export function CreateRoomForm({
     onSuccess: (s) => router.push(`/room/${s.code}`),
   });
 
+  if (availability.isPending || account.isPending)
+    return <SectionSkeleton kind="form" />;
   return (
     <form
       className="create-room-form space-y-6 rounded-2xl border border-border/70 surface-panel bg-card p-5 md:p-6"
@@ -175,42 +183,9 @@ export function CreateRoomForm({
             />
           </div>
         )}
-        {format === 'party' && (
-          <details className="mb-4 rounded-xl border p-3 text-sm">
-            <summary className="cursor-pointer">Игра компанией</summary>
-            <label className="my-3 flex gap-2 items-center">
-              <input
-                type="checkbox"
-                checked={sharedAnswer}
-                onChange={(e) => setSharedAnswer(e.target.checked)}
-              />
-              Общий ответ · подтверждает ведущий
-            </label>
-            <p className="mb-2 text-muted-foreground">Любимые эпохи</p>
-            <TastePicker value={tastes} onChange={setTastes} />
-          </details>
-        )}
         <fieldset className="room-compact-options">
           <legend className="sr-only">Способ ответа</legend>
-          <div className="room-option-group">
-            {(['search', 'choices'] as const).map((value) => (
-              <Button
-                key={value}
-                type="button"
-                className="room-option"
-                variant="ghost"
-                aria-pressed={answerMode === value}
-                onClick={() => setAnswerMode(value)}
-              >
-                {value === 'search' ? (
-                  <TextCursorInput aria-hidden="true" />
-                ) : (
-                  <ListChecks aria-hidden="true" />
-                )}
-                {value === 'search' ? 'Ввод названия' : 'Выбор из 4'}
-              </Button>
-            ))}
-          </div>
+          <AnswerChoice value={answerMode} onChange={setAnswerMode} />
         </fieldset>
         {format === 'party' && (
           <fieldset className="room-compact-options">
@@ -341,11 +316,6 @@ export function CreateRoomForm({
                   <span className="text-[11px] text-muted-foreground">
                     {rounds === 3 ? 'раунда' : 'раундов'}
                   </span>
-                  {rounds === 5 && (
-                    <span className="mt-1 rounded-full bg-primary/20 px-1.5 py-0.2 text-[9px] font-bold text-primary">
-                      Хит
-                    </span>
-                  )}
                 </button>
               );
             })}
@@ -394,7 +364,7 @@ export function CreateRoomForm({
 
       {/* 3. Category & Player Nickname */}
       <div className="grid gap-6 md:grid-cols-2">
-        <fieldset className="space-y-3">
+        <fieldset className="space-y-3 settings-category">
           <legend className="text-sm font-semibold tracking-tight text-white flex items-center gap-2">
             <Palette className="size-4 text-primary" />
             Категория произведений
@@ -457,16 +427,34 @@ export function CreateRoomForm({
       </div>
 
       {/* 4. Collection Picker */}
-      <div className="border-t border-border/40 pt-6">
-        <CollectionPicker
-          value={collection}
-          onChange={setCollection}
-          availability={availability.data}
-          category={category}
-          mode={mode}
-          isLoading={availability.isPending}
-        />
-      </div>
+      <details className="create-collection rounded-xl border p-3">
+        <summary>Подборка и дополнительные настройки</summary>
+        <div className="mt-3 space-y-4">
+          {format === 'party' && (
+            <details className="rounded-xl border p-3 text-sm">
+              <summary className="cursor-pointer">Игра компанией</summary>
+              <label className="my-3 flex gap-2 items-center">
+                <input
+                  type="checkbox"
+                  checked={sharedAnswer}
+                  onChange={(e) => setSharedAnswer(e.target.checked)}
+                />
+                Общий ответ · подтверждает ведущий
+              </label>
+              <p className="mb-2 text-muted-foreground">Любимые эпохи</p>
+              <TastePicker value={tastes} onChange={setTastes} />
+            </details>
+          )}
+          <CollectionPicker
+            value={collection}
+            onChange={setCollection}
+            availability={availability.data}
+            category={category}
+            mode={mode}
+            isLoading={availability.isPending}
+          />
+        </div>
+      </details>
 
       {/* 5. Error & Status Notifications */}
       {!availability.isPending && !canUseCatalog && (

@@ -15,7 +15,7 @@ const listeners = new Set();
 async function post(path, body) {
   const r = await fetch(`${base}/api/rooms${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Origin: base },
     body: JSON.stringify(body),
   });
   assert.equal(r.status, 201);

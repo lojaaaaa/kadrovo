@@ -51,6 +51,24 @@ describe('rooms', () => {
     s.leave(b.code, b.token);
     expect(() => s.snapshot(a.code)).toThrow();
   });
+  it('removes an abandoned party after a reconnect grace period', () => {
+    vi.useFakeTimers();
+    try {
+      const s = new RoomsService();
+      const a = s.create(input);
+      s.connect(a.code, a.token, 'socket-a');
+      s.disconnect(a.code, 'socket-a');
+      vi.advanceTimersByTime(30000);
+      s.connect(a.code, a.token, 'socket-b');
+      vi.advanceTimersByTime(31000);
+      expect(s.snapshot(a.code).players).toHaveLength(1);
+      s.disconnect(a.code, 'socket-b');
+      vi.advanceTimersByTime(60001);
+      expect(() => s.snapshot(a.code)).toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it('expires rooms after two hours', () => {
     vi.useFakeTimers();
     const s = new RoomsService();

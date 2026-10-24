@@ -1,5 +1,5 @@
 'use client';
-/* eslint-disable @next/next/no-img-element -- Authorized game rasters and private media use the same origin cache. */
+import { PosterImage } from './poster-image';
 import { ResultShare } from './result-share';
 import { m } from './motion-system';
 import { useReducedMotion } from 'motion/react';
@@ -72,6 +72,23 @@ export function GameReview({
     },
   });
   const solved = history.filter((r) => r.solved).length;
+  if (game.termination?.reason === 'aborted')
+    return (
+      <section
+        className="review-screen rounded-2xl border bg-card p-6 sm:p-8"
+        role="status"
+      >
+        <h1 className="text-2xl font-bold">Партия прервана</h1>
+        <p className="mt-3 text-muted-foreground">
+          Игрок вышел в первом раунде при нулевом счёте. Результат не засчитан,
+          рейтинг не изменился.
+        </p>
+        <Button className="mt-6" onClick={leave}>
+          Выйти
+        </Button>
+      </section>
+    );
+  const forfeited = game.termination?.reason === 'forfeit';
   return (
     <section className="review-screen space-y-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -83,7 +100,20 @@ export function GameReview({
                 ? 'Тренировка · ' + room.practiceDay
                 : 'Игра завершена'}
           </p>
-          <h1 className="text-3xl font-bold mt-2">{score} очков</h1>
+          <h1 className="text-3xl font-bold mt-2">
+            {forfeited
+              ? game.termination?.winnerId === playerId
+                ? 'Победа'
+                : 'Поражение'
+              : `${score} очков`}
+          </h1>
+          {forfeited && (
+            <p className="mt-2 text-muted-foreground">
+              {game.termination?.winnerId === playerId
+                ? 'Соперник покинул игру. Вам засчитана победа.'
+                : 'Вы покинули игру. Засчитано поражение.'}
+            </p>
+          )}
           <p className="mt-2 text-muted-foreground">
             Угадано {solved} из {history.length}
           </p>
@@ -107,7 +137,12 @@ export function GameReview({
           ) : (
             <Button
               onClick={rematch}
-              disabled={restarting || room.rematchVotes?.includes(playerId)}
+              disabled={
+                restarting ||
+                room.players.filter((p) => p.connected).length <
+                  (room.minimumPlayers ?? 2) ||
+                room.rematchVotes?.includes(playerId)
+              }
             >
               <Users />
               {room.rematchVotes?.includes(playerId)
@@ -116,6 +151,17 @@ export function GameReview({
               · {room.rematchVotes?.length ?? 0}/{room.players.length}
             </Button>
           ))}
+        {room.format !== 'solo' &&
+          room.players.filter((p) => p.connected).length <
+            (room.minimumPlayers ?? 2) && (
+            <p
+              role="status"
+              className="self-center text-sm text-muted-foreground"
+            >
+              Недостаточно игроков для новой игры · нужно{' '}
+              {room.minimumPlayers ?? 2}
+            </p>
+          )}
         <ResultShare history={history} score={score} day={room.dailyDay} />
         {!game.demo && !room.dailyDay && (
           <Button
@@ -187,9 +233,7 @@ export function GameReview({
               delay: reduced ? 0 : Math.min(i, 5) * 0.045,
             }}
           >
-            {r.title.posterUrl && (
-              <img src={r.title.posterUrl} alt="" loading="lazy" />
-            )}
+            {r.title.posterUrl && <PosterImage src={r.title.posterUrl} />}
             <div className="min-w-0 flex-1">
               <h2 className="font-semibold">{r.title.name}</h2>
               <p className="text-xs text-muted-foreground mt-1">

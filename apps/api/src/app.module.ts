@@ -1,3 +1,4 @@
+import { ChronologyController } from './game/chronology.controller';
 import { CatalogTransferController } from './content/transfer.controller';
 import { ExperienceService } from './rooms/experience.service';
 import { ExperienceController } from './rooms/experience.controller';
@@ -24,6 +25,7 @@ class HealthController {
 @Module({
   controllers: [
     HealthController,
+    ChronologyController,
     ExperienceController,
     CatalogTransferController,
     RatingController,

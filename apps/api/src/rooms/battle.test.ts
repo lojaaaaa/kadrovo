@@ -17,7 +17,7 @@ describe('solo and random duels', () => {
       'frames',
       'catalog',
       'all',
-      3,
+      5,
       expect.any(Object),
     );
     const solo = rooms.create({
@@ -203,13 +203,161 @@ it('adds a completed quick match to the activity feed once without leaking room 
   expect(feed[0]?.players).toBe(2);
 });
 
-it('starts a small company after the gathering window instead of waiting for eight', () => {
+it('waits for three and gathers four players in the same company after its window', () => {
   vi.useFakeTimers();
   const queue = new BattleService(new RoomsService(catalog));
   queue.quickJoin({ id: 'one', nickname: 'Один' }, 'group');
   queue.quickJoin({ id: 'two', nickname: 'Два' }, 'group');
   expect(queue.quickStatus('one').status).toBe('waiting');
   vi.advanceTimersByTime(8001);
-  expect(queue.quickStatus('one').status).toBe('matched');
-  expect(queue.quickStatus('two').status).toBe('matched');
+  expect(queue.quickStatus('one').status).toBe('waiting');
+  queue.quickJoin({ id: 'three', nickname: 'Три' }, 'group');
+  vi.advanceTimersByTime(4000);
+  queue.quickJoin({ id: 'four', nickname: 'Четыре' }, 'group');
+  expect(queue.quickStatus('one').status).toBe('waiting');
+  vi.advanceTimersByTime(4001);
+  const states = ['one', 'two', 'three', 'four'].map((id) =>
+    queue.quickStatus(id),
+  );
+  expect(states.every((s) => s.status === 'matched')).toBe(true);
+  expect(
+    new Set(states.map((s) => ('session' in s ? s.session?.code : ''))).size,
+  ).toBe(1);
+});
+
+it('rejects a forced party start after the only opponent leaves', () => {
+  const rooms = new RoomsService(catalog);
+  const a = rooms.create({ nickname: 'A', category: 'movies', mode: 'frames' });
+  const b = rooms.join(a.code, 'B');
+  rooms.connect(a.code, a.token, 'a');
+  rooms.connect(b.code, b.token, 'b');
+  rooms.leave(b.code, b.token);
+  expect(() => rooms.start(a.code, a.token, true)).toThrow('двое');
+  expect(rooms.snapshot(a.code).game).toBeUndefined();
+});
+it('blocks a solo rematch after the opponent leaves and preserves the finished match', () => {
+  vi.useFakeTimers();
+  const rooms = new RoomsService(catalog);
+  const [a, b] = rooms.createBattle('A', 'B');
+  rooms.connect(a.code, a.token, 'a');
+  rooms.connect(b.code, b.token, 'b');
+  for (
+    let i = 0;
+    i < 5 && rooms.snapshot(a.code).game?.phase !== 'finished';
+    i++
+  ) {
+    const game = rooms.snapshot(a.code).game!;
+    rooms.skip(a.code, a.token, game.roundId);
+    rooms.skip(b.code, b.token, game.roundId);
+    vi.advanceTimersByTime(3100);
+    rooms.tick();
+  }
+  const matchId = rooms.snapshot(a.code).game!.matchId;
+  rooms.leave(b.code, b.token);
+  expect(() => rooms.rematch(a.code, a.token)).toThrow('минимум 2');
+  expect(rooms.snapshot(a.code).game).toMatchObject({
+    matchId,
+    phase: 'finished',
+  });
+});
+it('requires three connected players for a company rematch', () => {
+  vi.useFakeTimers();
+  const rooms = new RoomsService(catalog);
+  const sessions = rooms.createQuick(
+    ['A', 'B', 'C'].map((nickname) => ({ nickname })),
+  );
+  sessions.forEach((s, i) => rooms.connect(s.code, s.token, String(i)));
+  for (let i = 0; i < 3; i++) {
+    const game = rooms.snapshot(sessions[0]!.code).game!;
+    sessions.forEach((s) => rooms.skip(s.code, s.token, game.roundId));
+    vi.advanceTimersByTime(3100);
+    rooms.tick();
+  }
+  rooms.leave(sessions[2]!.code, sessions[2]!.token);
+  expect(() => rooms.rematch(sessions[0]!.code, sessions[0]!.token)).toThrow(
+    'минимум 3',
+  );
+  expect(rooms.snapshot(sessions[0]!.code).minimumPlayers).toBe(3);
+});
+
+it('plays five films in a rated duel when the catalog has five', () => {
+  const first = catalog.deck('movies')[0]!;
+  const deck = Array.from({ length: 5 }, (_, i) => ({
+    ...first,
+    title: { ...first.title, id: `film-${i}`, name: `Фильм ${i}` },
+  }));
+  const rooms = new RoomsService({
+    deck: () => deck,
+    has: () => true,
+    search: () => [],
+  });
+  const [a, b] = rooms.createBattle('A', 'B', ['a', 'b']);
+  rooms.connect(a.code, a.token, 'a');
+  rooms.connect(b.code, b.token, 'b');
+  expect(rooms.snapshot(a.code).game?.totalRounds).toBe(5);
+});
+
+it('removes an old unranked search before joining ranked and never mixes opponents', () => {
+  const queue = new BattleService(new RoomsService(catalog));
+  queue.quickJoin({ id: 'a', nickname: 'A' }, 'duel');
+  queue.join({ id: 'a', nickname: 'A' });
+  expect(queue.quickStatus('a').status).toBe('idle');
+  expect(queue.quickJoin({ id: 'b', nickname: 'B' }, 'duel').status).toBe(
+    'waiting',
+  );
+  expect(queue.status('a').status).toBe('waiting');
+  const ranked = queue.join({ id: 'c', nickname: 'C' });
+  expect(ranked.status).toBe('matched');
+  expect(queue.status('a').status).toBe('matched');
+  expect(queue.quickStatus('b').status).toBe('waiting');
+});
+it('removes an old ranked search before joining unranked', () => {
+  const queue = new BattleService(new RoomsService(catalog));
+  queue.join({ id: 'a', nickname: 'A' });
+  queue.quickJoin({ id: 'a', nickname: 'A' }, 'duel');
+  expect(queue.status('a').status).toBe('idle');
+  expect(queue.join({ id: 'b', nickname: 'B' }).status).toBe('waiting');
+  expect(queue.quickJoin({ id: 'c', nickname: 'C' }, 'duel').status).toBe(
+    'matched',
+  );
+  expect(queue.quickStatus('a').status).toBe('matched');
+  expect(queue.status('b').status).toBe('waiting');
+});
+it('does not move a matched player to a different queue', () => {
+  const queue = new BattleService(new RoomsService(catalog));
+  queue.quickJoin({ id: 'a', nickname: 'A' }, 'duel');
+  queue.quickJoin({ id: 'b', nickname: 'B' }, 'duel');
+  expect(() => queue.join({ id: 'a', nickname: 'A' })).toThrow('без рейтинга');
+  expect(() => queue.quickJoin({ id: 'a', nickname: 'A' }, 'group')).toThrow(
+    'уже найдена',
+  );
+  queue.join({ id: 'c', nickname: 'C' });
+  queue.join({ id: 'd', nickname: 'D' });
+  expect(() => queue.quickJoin({ id: 'c', nickname: 'C' }, 'duel')).toThrow(
+    'рейтинговая',
+  );
+});
+it('replaces the previous waiting unranked kind instead of silently restoring it', () => {
+  const queue = new BattleService(new RoomsService(catalog));
+  queue.quickJoin({ id: 'a', nickname: 'A' }, 'duel');
+  expect(queue.quickJoin({ id: 'a', nickname: 'A' }, 'group')).toMatchObject({
+    status: 'waiting',
+    kind: 'group',
+  });
+  expect(queue.quickJoin({ id: 'b', nickname: 'B' }, 'duel').status).toBe(
+    'waiting',
+  );
+});
+it('does not return a matched room after leaving it or after a peer left before start', () => {
+  const rooms = new RoomsService(catalog);
+  const queue = new BattleService(rooms);
+  queue.quickJoin({ id: 'a', nickname: 'A' }, 'duel');
+  const found = queue.quickJoin({ id: 'b', nickname: 'B' }, 'duel');
+  if (!('session' in found)) throw Error('No match');
+  rooms.leave(found.session!.code, found.session!.token);
+  expect(queue.quickStatus('b').status).toBe('idle');
+  expect(queue.quickStatus('a').status).toBe('idle');
+  expect(queue.quickJoin({ id: 'a', nickname: 'A' }, 'duel').status).toBe(
+    'waiting',
+  );
 });

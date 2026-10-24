@@ -20,9 +20,9 @@ async function bootstrap() {
   });
   if (process.env.TRUST_PROXY === '1') app.set('trust proxy', 1);
   app.use(helmet());
-  app.use('/api/internal/catalog', json({ limit: '3mb' }));
-  app.use(json({ limit: '100kb' }));
-  app.use(urlencoded({ extended: true, limit: '100kb' }));
+  app.use('/api/internal/catalog', json({ limit: '3mb', inflate: false }));
+  app.use(json({ limit: '100kb', inflate: false }));
+  app.use(urlencoded({ extended: true, limit: '100kb', inflate: false }));
   app.enableCors({ origin: env.WEB_ORIGIN });
   app.setGlobalPrefix('api');
   app.enableShutdownHooks();

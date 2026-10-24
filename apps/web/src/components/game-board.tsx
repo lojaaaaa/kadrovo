@@ -1,14 +1,16 @@
 'use client';
+import { GameStandings } from './game-standings';
+import { AnswerForm } from './game-answer';
+import { PosterImage } from './poster-image';
 import { roundClock } from '@/lib/round-clock';
 import { GameReview } from './game-review';
 import { FrameReport } from './frame-report';
 import { FramePlayer } from './frame-player';
 import { HelpTip } from './ui/help-tip';
-import { m } from './motion-system';
 import { LogOut, Film, Sparkles } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { playSound } from '@/lib/sound';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import type { Socket } from 'socket.io-client';
 import {
   modeLabels,
@@ -16,14 +18,9 @@ import {
   type RoomSnapshot,
   type GameSnapshot,
   type GamePersonal,
-  type TitleOption,
-  type SearchAck,
-  type AnswerAck,
   type RoomAck,
 } from '@filmless/contracts';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
 import { Card } from './ui/card';
 
 export function GameBoard({
@@ -57,16 +54,21 @@ export function GameBoard({
   format?: 'party' | 'solo' | 'battle';
   onOpenLobby?: () => void;
 }) {
+  const loadedFrame = useRef<string | null>(null);
   const [clock, setClock] = useState({ anchor: receivedAt, elapsed: 0 });
   useEffect(() => {
     const update = () =>
-      setClock({
-        anchor: receivedAt,
-        elapsed: Math.max(0, performance.now() - receivedAt),
+      setClock((previous) => {
+        const elapsed =
+          Math.floor(Math.max(0, performance.now() - receivedAt) / 1000) * 1000;
+        return previous.anchor === receivedAt && previous.elapsed === elapsed
+          ? previous
+          : { anchor: receivedAt, elapsed };
       });
+    if (game.phase === 'finished') return;
     const timer = setInterval(update, 100);
     return () => clearInterval(timer);
-  }, [receivedAt]);
+  }, [receivedAt, game.phase]);
   const now =
     game.serverNow + (clock.anchor === receivedAt ? clock.elapsed : 0);
   const remaining = Math.max(
@@ -109,6 +111,11 @@ export function GameBoard({
   ]);
   const navigation = useMutation({
     mutationFn: async (stage: number) => {
+      if (
+        stage > (game.unlockedStage ?? 0) &&
+        loadedFrame.current !== game.image
+      )
+        throw new Error('Дождитесь загрузки текущего кадра.');
       const socket = getSocket();
       if (!socket?.connected) throw new Error('Нет соединения.');
       const ack: RoomAck = await socket
@@ -127,6 +134,16 @@ export function GameBoard({
     wrong: game.personalWrong,
   });
   const { mutate: navigate, isPending: navigating } = navigation;
+  const onFrameLoaded = useCallback((src: string) => {
+    loadedFrame.current = src;
+  }, []);
+  const navigateFrame = useCallback(
+    (stage: number) => {
+      playSound('whoosh');
+      navigate(stage);
+    },
+    [navigate],
+  );
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (
@@ -214,7 +231,7 @@ export function GameBoard({
 
   return (
     <section
-      className={`game-board ${game.standings.length === 1 ? 'game-solo' : ''} ${game.mode === 'spotlight' ? 'game-spotlight' : ''} rounded-2xl border border-border/70 surface-panel bg-card p-3 sm:p-4 game-viewport`}
+      className={`game-board ${game.standings.length === 1 ? 'game-solo' : ''} ${game.mode === 'spotlight' || game.mode === 'pixels' ? 'game-spotlight' : ''} rounded-2xl border border-border/70 surface-panel bg-card p-3 sm:p-4 game-viewport`}
       aria-label="Партия"
     >
       <div className="game-topbar flex items-center justify-between gap-4">
@@ -251,7 +268,9 @@ export function GameBoard({
             aria-label={`${clockDisplay.value} ${clockDisplay.label}`}
           >
             <span className="game-timer-value">{clockDisplay.value}</span>
-            <span className="game-timer-label">{clockDisplay.label}</span>
+            {clockDisplay.label !== 'с' && (
+              <span className="game-timer-label">{clockDisplay.label}</span>
+            )}
           </p>
         </div>
       </div>
@@ -259,6 +278,7 @@ export function GameBoard({
         <div className="game-image-group">
           <FramePlayer
             game={game}
+            onLoaded={onFrameLoaded}
             disabled={
               spectator ||
               !connected ||
@@ -268,10 +288,7 @@ export function GameBoard({
               !!mine?.wrong ||
               !!game.personalSkipped
             }
-            navigate={(stage) => {
-              playSound('whoosh');
-              navigate(stage);
-            }}
+            navigate={navigateFrame}
           />
           <div
             className="flex shrink-0 gap-2"
@@ -358,8 +375,7 @@ export function GameBoard({
           >
             <div className="flex items-center gap-4">
               {game.answer?.posterUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <PosterImage
                   src={game.answer.posterUrl}
                   alt={game.answer.name}
                   className="size-20 rounded-xl border border-primary/30 object-cover shadow-md shrink-0"
@@ -395,513 +411,7 @@ export function GameBoard({
         )}
       </div>
       <FrameReport key={`${game.roundId}:${game.stage}`} session={session} />
-      {game.standings.length > 1 && (
-        <Card className="game-standings rounded-xl px-3 py-2">
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            {game.standings.length === 1 ? 'Ваш счёт' : 'Игроки · время · очки'}
-          </h3>
-          <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {game.standings.map((p) => (
-              <m.li
-                initial={{ opacity: 0.6 }}
-                animate={{ opacity: 1 }}
-                key={p.playerId}
-                className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-secondary/60 p-2 text-sm"
-              >
-                <span>
-                  <span className="mr-3 text-muted-foreground">
-                    {game.standings.findIndex(
-                      (other) => other.score === p.score,
-                    ) + 1}
-                  </span>
-                  {p.nickname}
-                  {p.playerId === playerId ? ' (вы)' : ''}
-                  {p.solved && game.phase === 'playing'
-                    ? ` · угадал #${p.finishOrder ?? ''}`
-                    : ''}
-                  {game.phase === 'playing' && (
-                    <span className="mt-1 block text-xs font-semibold tabular-nums text-primary">
-                      {p.solved
-                        ? '✓ Готов'
-                        : p.wrong
-                          ? 'Неверный ответ · −4'
-                          : p.skipped
-                            ? 'Пропустил'
-                            : p.expired || (p.deadline ?? game.endsAt) <= now
-                              ? 'Время вышло'
-                              : `${Math.max(0, Math.ceil(((p.deadline ?? game.endsAt) - now) / 1000))} с · угадывает`}
-                    </span>
-                  )}
-                </span>
-                <m.strong
-                  key={p.score}
-                  initial={{ opacity: 0.5 }}
-                  animate={{ opacity: 1 }}
-                  className="text-xl tabular-nums text-primary"
-                >
-                  {p.score}
-                  <span className="ml-1 text-xs text-muted-foreground">
-                    оч.
-                  </span>
-                </m.strong>
-              </m.li>
-            ))}
-          </ol>
-        </Card>
-      )}
+      <GameStandings game={game} playerId={playerId} now={now} />
     </section>
-  );
-}
-function AnswerForm({
-  game,
-  personal,
-  solved,
-  getSocket,
-  connected,
-  now,
-}: {
-  game: GameSnapshot;
-  personal: GamePersonal | null;
-  solved: boolean;
-  getSocket: () => Socket | null;
-  connected: boolean;
-  now: number;
-}) {
-  const [query, setQuery] = useState('');
-  const [active, setActive] = useState(-1);
-  const [dismissed, setDismissed] = useState(false);
-  const [debounced, setDebounced] = useState('');
-  const [selected, setSelected] = useState<TitleOption | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const expired = now >= game.endsAt;
-
-  useEffect(() => {
-    if (
-      !solved &&
-      !personal?.solved &&
-      !expired &&
-      window.matchMedia('(pointer: fine)').matches
-    ) {
-      inputRef.current?.focus();
-    }
-  }, [game.roundId, solved, personal?.solved, expired]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query.trim()), 200);
-    return () => clearTimeout(timer);
-  }, [query]);
-  const search = useQuery({
-    queryKey: ['titles', game.matchId, debounced],
-    enabled: connected && !solved && debounced.length >= 2,
-    staleTime: 60_000,
-    retry: false,
-    queryFn: async () => {
-      const socket = getSocket();
-      if (!socket?.connected) throw new Error('Нет соединения.');
-      const ack: SearchAck = await socket
-        .timeout(5000)
-        .emitWithAck('game:search', { query: debounced });
-      if (!ack.ok) throw new Error(ack.message);
-      return ack.titles;
-    },
-  });
-  const answer = useMutation({
-    mutationFn: async (directTitle?: TitleOption) => {
-      const socket = getSocket();
-      const target = directTitle ?? selected;
-      if (!socket?.connected || !target)
-        throw new Error('Выберите название и дождитесь соединения.');
-      const ack: AnswerAck = await socket
-        .timeout(5000)
-        .emitWithAck('game:answer', {
-          roundId: game.roundId,
-          commandId: crypto.randomUUID(),
-          titleId: target.id,
-        });
-      if (!ack.ok) throw new Error(ack.message);
-      if (ack.status === 'correct') {
-        playSound('correct', `${game.roundId}:correct`);
-        playSound('streak');
-      } else if (ack.status === 'incorrect') {
-        playSound('incorrect');
-      }
-      return ack;
-    },
-  });
-  const skip = useMutation({
-    mutationFn: async () => {
-      const socket = getSocket();
-      if (!socket?.connected) throw new Error('Нет соединения.');
-      playSound('skip');
-      const ack: RoomAck = await socket
-        .timeout(5000)
-        .emitWithAck('game:skip', { roundId: game.roundId });
-      if (!ack.ok) throw new Error(ack.message);
-    },
-  });
-  const cooldown = Math.max(
-    0,
-    Math.ceil(
-      ((personal?.nextAllowedAt ?? answer.data?.nextAllowedAt ?? 0) - now) /
-        1000,
-    ),
-  );
-  const options =
-    !selected &&
-    !dismissed &&
-    connected &&
-    query.trim() === debounced &&
-    debounced.length >= 2 &&
-    !search.isFetching
-      ? (search.data ?? [])
-      : [];
-  const activeOption = options[active];
-  const choose = (title: TitleOption) => {
-    setSelected(title);
-    setActive(-1);
-    setDismissed(true);
-    if (
-      !cooldown &&
-      !expired &&
-      connected &&
-      !answer.isPending &&
-      !skip.isPending
-    ) {
-      answer.mutate(title);
-    }
-  };
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (
-        game.answerMode !== 'choices' ||
-        e.repeat ||
-        e.ctrlKey ||
-        e.metaKey ||
-        e.altKey ||
-        e.isComposing ||
-        !(e.key >= '1' && e.key <= '4') ||
-        solved ||
-        expired ||
-        game.personalWrong ||
-        answer.isPending ||
-        skip.isPending ||
-        !connected
-      )
-        return;
-      const target = e.target;
-      if (
-        target instanceof HTMLElement &&
-        target.closest('input,textarea,select,[contenteditable=true]')
-      )
-        return;
-      const title = game.choices?.[Number(e.key) - 1];
-      if (title) {
-        e.preventDefault();
-        answer.mutate(title);
-      }
-    };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [game, solved, expired, answer, skip.isPending, connected]);
-  if (
-    game.answerMode === 'choices' &&
-    (game.personalWrong || answer.data?.status === 'incorrect')
-  )
-    return (
-      <Card role="status" className="border-destructive/30 p-4">
-        <p className="font-semibold text-destructive">
-          Неверный ответ · −4 очка
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Попытка завершена. Остальные ещё отвечают.
-        </p>
-      </Card>
-    );
-  if (expired && !solved && !personal?.solved)
-    return (
-      <Card className="p-6" role="status">
-        <h3 className="text-xl font-bold">
-          {game.personalSkipped
-            ? 'Вы пропустили этот фильм'
-            : 'Ваше время вышло'}
-        </h3>
-        <p className="text-sm text-muted-foreground">
-          Остальные ещё угадывают. Следите за их временем в таблице — следующий
-          раунд начнётся, когда все закончат.
-        </p>
-      </Card>
-    );
-  if (solved || personal?.solved)
-    return (
-      <Card className="border-primary/40 p-5" role="status">
-        <p className="font-semibold text-primary">Правильный ответ</p>
-        <p className="text-sm text-muted-foreground">
-          {game.standings.length === 1
-            ? 'Показываем ответ и переходим дальше.'
-            : 'Остальные ещё играют. Когда все закончат, сразу перейдём дальше.'}
-        </p>
-      </Card>
-    );
-  if (game.answerMode === 'choices')
-    return (
-      <div className="answer-form space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          {game.choices?.map((title, index) => (
-            <Button
-              key={title.id}
-              className="h-auto min-h-12 justify-start whitespace-normal text-left"
-              variant="outline"
-              disabled={
-                !connected ||
-                !!cooldown ||
-                answer.isPending ||
-                skip.isPending ||
-                game.personalWrong ||
-                answer.data?.status === 'incorrect'
-              }
-              onClick={() => answer.mutate(title)}
-            >
-              <span className="mr-2 text-muted-foreground">{index + 1}.</span>
-              {title.name} ({title.year})
-            </Button>
-          ))}
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <p role="status" className="text-sm text-muted-foreground">
-            {cooldown
-              ? `Следующая попытка через ${cooldown} с`
-              : answer.data?.status === 'incorrect'
-                ? 'Неверный ответ · −4 очка'
-                : 'Одна попытка · ошибка −4 очка'}
-          </p>
-          <Button
-            variant="ghost"
-            disabled={skip.isPending || !connected}
-            onClick={() => skip.mutate()}
-          >
-            Не знаю
-          </Button>
-        </div>
-        {answer.error && (
-          <p role="alert" className="text-destructive">
-            {answer.error.message}
-          </p>
-        )}
-      </div>
-    );
-  return (
-    <form
-      id="answer-form"
-      className="answer-form relative space-y-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (
-          selected &&
-          !cooldown &&
-          !expired &&
-          connected &&
-          !answer.isPending &&
-          !skip.isPending
-        )
-          answer.mutate();
-      }}
-    >
-      <Label className="sr-only" htmlFor="answer-search">
-        Как называется это кино?
-      </Label>
-      <div className="answer-controls flex flex-wrap sm:flex-nowrap gap-2 items-center">
-        <div className="answer-input answer-input-wrap">
-          <Input
-            ref={inputRef}
-            className="h-14 rounded-xl text-base pl-4 pr-12 font-medium"
-            id="answer-search"
-            autoComplete="off"
-            role="combobox"
-            aria-autocomplete="list"
-            aria-expanded={options.length > 0}
-            aria-controls={options.length ? 'answer-options' : undefined}
-            aria-activedescendant={
-              activeOption ? `answer-option-${activeOption.id}` : undefined
-            }
-            aria-describedby="answer-help"
-            onKeyDown={(e) => {
-              if (e.nativeEvent.isComposing) return;
-              if (e.key === 'Escape') {
-                setDismissed(true);
-                setActive(-1);
-              } else if (
-                (e.key === 'ArrowDown' || e.key === 'ArrowUp') &&
-                options.length
-              ) {
-                e.preventDefault();
-                setActive((current) =>
-                  e.key === 'ArrowDown'
-                    ? (current + 1) % options.length
-                    : (current <= 0 ? options.length : current) - 1,
-                );
-              } else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (activeOption) {
-                  choose(activeOption);
-                } else if (
-                  selected &&
-                  !cooldown &&
-                  !expired &&
-                  connected &&
-                  !answer.isPending
-                ) {
-                  answer.mutate();
-                }
-              }
-            }}
-            maxLength={80}
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setSelected(null);
-              setActive(-1);
-              setDismissed(false);
-              answer.reset();
-            }}
-            placeholder="Название фильма"
-            disabled={expired}
-          />
-          <HelpTip label="Как ответить">
-            Введите название по-русски и выберите фильм из списка — ответ
-            отправится сразу. ↑ и ↓ — выбор, Enter — ответ.
-          </HelpTip>
-        </div>
-        <p id="answer-help" className="sr-only">
-          Найдите название и кликните по нему для мгновенного ответа. Стрелки —
-          выбор, Enter — подтверждение.
-        </p>
-        {!selected &&
-          !dismissed &&
-          connected &&
-          query.trim() === debounced &&
-          debounced.length >= 2 && (
-            <div
-              className="answer-suggestions absolute inset-x-0 bottom-full z-20 mb-2 rounded-xl border bg-card/95 p-2 shadow-2xl backdrop-blur-xl"
-              aria-live="polite"
-            >
-              {search.isFetching ? (
-                <p className="text-sm text-muted-foreground p-2">Ищем…</p>
-              ) : search.error ? (
-                <p role="alert" className="p-2 text-destructive">
-                  Поиск недоступен. Попробуйте ещё раз.
-                </p>
-              ) : search.data?.length ? (
-                <ul
-                  className="grid max-h-[min(36dvh,320px)] grid-cols-1 gap-1.5 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3"
-                  id="answer-options"
-                  role="listbox"
-                  aria-label="Результаты поиска"
-                >
-                  {search.data.map((t, index) => (
-                    <li key={t.id} role="presentation">
-                      <button
-                        type="button"
-                        role="option"
-                        id={`answer-option-${t.id}`}
-                        aria-selected={index === active}
-                        className="aria-selected:bg-primary/20 flex h-full w-full items-center gap-3 rounded-xl border p-2 text-left hover:border-primary hover:bg-secondary focus-visible:bg-secondary transition-colors"
-                        onClick={() => choose(t)}
-                      >
-                        <Poster url={t.posterUrl} />
-                        <span className="flex-1 text-sm font-medium leading-snug">
-                          {t.name}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {t.year ?? '—'}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground p-2">
-                  Такое название пока не найдено в этой подборке.
-                </p>
-              )}
-            </div>
-          )}
-        <Button
-          type="submit"
-          className="h-14 px-6 text-base font-bold shrink-0"
-          disabled={
-            !selected ||
-            !!cooldown ||
-            expired ||
-            !connected ||
-            answer.isPending ||
-            skip.isPending
-          }
-        >
-          {!connected
-            ? 'Восстанавливаем связь…'
-            : expired
-              ? 'Время вышло'
-              : cooldown
-                ? `Пауза ${cooldown} с`
-                : answer.isPending
-                  ? 'Проверяем…'
-                  : selected
-                    ? 'Отправить ответ →'
-                    : 'Ответить'}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-14 px-5 text-sm shrink-0"
-          disabled={!connected || expired || answer.isPending || skip.isPending}
-          onClick={() => skip.mutate()}
-        >
-          {skip.isPending ? 'Пропускаем…' : 'Не знаю'}
-        </Button>
-      </div>
-      {selected && (
-        <p className="truncate text-xs text-muted-foreground">
-          {selected.name} · {selected.year ?? '—'}
-        </p>
-      )}
-      {skip.error && (
-        <p role="alert" className="text-sm text-destructive">
-          {skip.error.message}
-        </p>
-      )}
-      <p role="status" className="empty:hidden text-xs text-muted-foreground">
-        {answer.error
-          ? 'Не удалось отправить ответ. Проверьте связь и повторите.'
-          : answer.data?.status === 'incorrect'
-            ? 'Неверный ответ. Попробуйте другое название.'
-            : answer.data?.status === 'finished'
-              ? 'Ответ пришёл после окончания раунда.'
-              : ''}
-      </p>
-    </form>
-  );
-}
-
-function Poster({ url }: { url?: string }) {
-  const [failed, setFailed] = useState(false);
-  return url && !failed ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={url}
-      alt=""
-      width={44}
-      height={66}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className="h-16 w-11 shrink-0 rounded-md object-cover"
-    />
-  ) : (
-    <span
-      aria-hidden="true"
-      className="flex h-16 w-11 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground"
-    >
-      ▶
-    </span>
   );
 }

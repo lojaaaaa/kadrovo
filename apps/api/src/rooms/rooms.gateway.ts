@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Inject, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import {
   ConnectedSocket,
@@ -43,6 +44,17 @@ export class RoomsGateway
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
   }
+  private access(socket: Socket, error: unknown) {
+    if (!(error instanceof ForbiddenException)) return;
+    const data = error.getResponse();
+    if (
+      typeof data === 'object' &&
+      'code' in data &&
+      data.code === 'GUEST_LIMIT' &&
+      'loginUrl' in data
+    )
+      socket.emit('access:required', { url: data.loginUrl });
+  }
   private auth(socket: Socket) {
     const now = Date.now();
     if (!socket.data.rate || now - socket.data.rate.since >= 1000)
@@ -67,6 +79,7 @@ export class RoomsGateway
       this.publish(auth.code);
       return { ok: true };
     } catch (error) {
+      this.access(socket, error);
       return {
         ok: false,
         message:
@@ -90,6 +103,7 @@ export class RoomsGateway
       this.publish(a.code);
       return { ok: true };
     } catch (error) {
+      this.access(socket, error);
       return {
         ok: false,
         message:
@@ -106,6 +120,7 @@ export class RoomsGateway
       this.publish(a.code);
       return { ok: true };
     } catch (error) {
+      this.access(socket, error);
       return {
         ok: false,
         message: error instanceof Error ? error.message : 'Реванш недоступен.',
@@ -127,6 +142,7 @@ export class RoomsGateway
       this.publish(a.code);
       return { ok: true };
     } catch (error) {
+      this.access(socket, error);
       this.publish(socket.data.auth?.code);
       return {
         ok: false,
@@ -148,6 +164,7 @@ export class RoomsGateway
       this.publish(a.code);
       return { ok: true, ...result };
     } catch (error) {
+      this.access(socket, error);
       this.publish(socket.data.auth?.code);
       return {
         ok: false,
@@ -171,6 +188,7 @@ export class RoomsGateway
       this.publish(a.code);
       return { ok: true };
     } catch (error) {
+      this.access(socket, error);
       this.publish(socket.data.auth?.code);
       return {
         ok: false,
@@ -197,6 +215,7 @@ export class RoomsGateway
       this.publish(a.code);
       return { ok: true };
     } catch (error) {
+      this.access(socket, error);
       this.publish(socket.data.auth?.code);
       return {
         ok: false,
@@ -220,6 +239,7 @@ export class RoomsGateway
         titles: this.rooms.search(a.code, a.token, input.data.query),
       };
     } catch (error) {
+      this.access(socket, error);
       this.publish(socket.data.auth?.code);
       return {
         ok: false,
@@ -251,7 +271,8 @@ export class RoomsGateway
       socket.data.auth = auth.data;
       void socket.join(auth.data.code);
       this.publish(auth.data.code);
-    } catch {
+    } catch (error) {
+      this.access(socket, error);
       socket.emit(
         'room:error',
         'Комната или сессия недействительна. Войдите снова.',
@@ -310,6 +331,7 @@ export class RoomsGateway
       }
       return { ok: true };
     } catch (error) {
+      this.access(socket, error);
       return {
         ok: false,
         message:

@@ -30,6 +30,30 @@ export class CatalogStore implements OnModuleDestroy {
   async onModuleDestroy() {
     await this.db.$disconnect();
   }
+  async importStills(
+    titleId: string,
+    provider: ImportedTitle['provider'],
+    images: { imageUrl: string }[],
+  ) {
+    for (const image of images)
+      await this.db.asset.upsert({
+        where: {
+          titleId_provider_sourceUrl: {
+            titleId,
+            provider,
+            sourceUrl: image.imageUrl,
+          },
+        },
+        create: {
+          titleId,
+          provider,
+          sourceUrl: image.imageUrl,
+          kind: 'still',
+          sourceType: 'still',
+        },
+        update: { retrievedAt: new Date() },
+      });
+  }
   async importTitle(input: ImportedTitle) {
     return this.db.$transaction(
       async (tx) => {

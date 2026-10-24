@@ -38,21 +38,40 @@ export function QueueResume() {
     queryFn: () => api<AccountState>('auth/me'),
   });
   const queue = useQuery({
-    queryKey: ['quick', account.data?.account?.id],
+    queryKey: ['quick', account.data?.account?.id ?? 'guest'],
     queryFn: () =>
       api<{ status: string; session?: RoomSession }>('battle/quick'),
-    enabled: active && !!account.data?.account,
+    enabled: active && !account.isPending && path !== '/battle',
+    staleTime: 0,
     refetchInterval: active ? 1500 : false,
   });
+  useEffect(() => {
+    if (active && queue.data?.status === 'idle') markQueue(false);
+  }, [active, queue.data?.status]);
   const session = queue.data?.session;
   useEffect(() => {
-    if (active && session && path !== '/room/' + session.code) {
+    if (
+      active &&
+      path !== '/battle' &&
+      queue.isFetchedAfterMount &&
+      !queue.isFetching &&
+      session &&
+      path !== '/room/' + session.code
+    ) {
       saveSession(session);
       markQueue(false);
       router.replace('/room/' + session.code);
     }
-  }, [active, session, path, router, queue.data?.status]);
-  return active && path !== '/online' ? (
+  }, [
+    active,
+    session,
+    path,
+    router,
+    queue.data?.status,
+    queue.isFetchedAfterMount,
+    queue.isFetching,
+  ]);
+  return active && path !== '/online' && path !== '/battle' ? (
     <div className="queue-banner" role="status">
       Ищем соперника в фоне. Найденная игра откроется автоматически.
     </div>

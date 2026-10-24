@@ -31,6 +31,8 @@ type Player = {
   sockets: Set<string>;
 };
 type Room = {
+  disconnectedUntil?: Map<string, number>;
+  emptySince?: number;
   dailyDay?: string;
   practiceDay?: string;
   savedDaily?: MatchState;
@@ -87,6 +89,19 @@ export class RoomsService {
     this.prune();
     this.activity();
     const changed: string[] = [];
+    for (const r of this.rooms.values()) {
+      for (const [id, deadline] of r.disconnectedUntil ?? []) {
+        if (
+          deadline <= Date.now() &&
+          !r.players.find((p) => p.id === id)?.sockets.size
+        ) {
+          r.disconnectedUntil!.delete(id);
+          this.departure(r, id);
+          r.revision++;
+          changed.push(r.code);
+        }
+      }
+    }
     for (const r of this.rooms.values())
       if (r.match?.advance(Date.now())) {
         r.revision++;
@@ -103,7 +118,15 @@ export class RoomsService {
     if (!r.match || !r.accounts || !r.battlePlayers || r.ratingQueued) return;
     const game = r.match.snapshot(Date.now());
     if (game.phase !== 'finished' && !forfeited) return;
-    if (game.phase === 'finished') forfeited = undefined;
+    if (game.termination?.reason === 'aborted') {
+      r.ratingQueued = true;
+      return;
+    }
+    if (game.phase === 'finished')
+      forfeited =
+        game.termination?.reason === 'forfeit'
+          ? game.termination.playerId
+          : undefined;
     const score = (id: string) =>
       forfeited
         ? id === forfeited
@@ -164,6 +187,29 @@ export class RoomsService {
     for (const player of r.players) player.ready = false;
     r.revision++;
   }
+  private checkTrial(r: Room, players = r.players) {
+    if (r.dailyDay) return;
+    for (const subject of new Set(
+      players.flatMap((p) => (p.subject ? [p.subject] : [])),
+    ))
+      this.experience?.assertTrial(
+        subject,
+        r.format === 'solo' ? 'solo' : 'online',
+        r.savedDaily?.id,
+      );
+  }
+  private recordTrial(r: Room) {
+    if (!r.match || r.dailyDay) return;
+    const matchId = r.match.snapshot(Date.now()).matchId;
+    for (const subject of new Set(
+      r.players.flatMap((p) => (p.subject ? [p.subject] : [])),
+    ))
+      this.experience?.useTrial(
+        subject,
+        r.format === 'solo' ? 'solo' : 'online',
+        matchId,
+      );
+  }
   start(code: string, token: string, force = false) {
     const id = this.authenticate(code, token),
       r = this.room(code);
@@ -191,6 +237,7 @@ export class RoomsService {
       throw new ConflictException(
         'Нужны хотя бы двое игроков. Все должны быть в сети и готовы.',
       );
+    this.checkTrial(r);
     const votes = Object.values(r.tasteVotes ?? {}).flat();
     if (votes.length) r.tastes = votes;
     r.match = new Match(
@@ -222,6 +269,7 @@ export class RoomsService {
       r.match.restore(r.savedDaily, r.players[0]!.id);
       r.savedDaily = undefined;
     }
+    this.recordTrial(r);
     for (const p of r.players) p.ready = false;
     this.experience?.metric('match_started');
     r.revision++;
@@ -282,6 +330,9 @@ export class RoomsService {
     for (const [code, room] of this.rooms)
       if (
         room.expiresAt <= Date.now() ||
+        (room.format === 'party' &&
+          room.emptySince !== undefined &&
+          Date.now() - room.emptySince >= 60000) ||
         (room.format === 'battle' &&
           !room.match &&
           (room.battleDeadline ?? Infinity) <= Date.now())
@@ -350,11 +401,14 @@ export class RoomsService {
         room.visibility !== 'public' ||
         !game ||
         game.phase !== 'finished' ||
+        game.termination?.reason === 'aborted' ||
         this.recorded.has(game.matchId)
       )
         continue;
       this.recorded.add(game.matchId);
-      const winner = game.standings[0]!;
+      const winner =
+        game.standings.find((p) => p.playerId === game.termination?.winnerId) ??
+        game.standings[0]!;
       this.recent.unshift({
         id: game.matchId,
         nickname: winner.nickname,
@@ -466,6 +520,7 @@ export class RoomsService {
       mode: 'frames',
       source: 'catalog',
       roundSeconds: 45,
+      totalRounds: 5,
     });
     const r = this.room(a.code);
     const b = this.add(
@@ -491,6 +546,7 @@ export class RoomsService {
     if (
       !r ||
       !r.players.some((p) => p.id === session.playerId) ||
+      (!r.match && r.players.length !== (r.quickCapacity ?? 2)) ||
       r.match?.snapshot(Date.now()).phase === 'finished'
     )
       return false;
@@ -551,6 +607,7 @@ export class RoomsService {
   private recordProgress(r: Room) {
     if (!r.match || !this.experience) return;
     const game = r.match.snapshot(Date.now());
+    if (game.termination?.reason === 'aborted') return;
     r.exposed ??= new Set();
     if (
       game.phase === 'finished' &&
@@ -710,12 +767,18 @@ export class RoomsService {
       r = this.room(code);
     if (!r.match || r.match.active || r.dailyDay || r.challengeId)
       throw new ConflictException('Реванш сейчас недоступен.');
+    const minimum =
+      r.format === 'solo' ? 1 : r.quick && (r.quickCapacity ?? 2) > 2 ? 3 : 2;
+    const active = r.players.filter((p) => p.sockets.size);
+    if (active.length < minimum)
+      throw new ConflictException(
+        `Для новой игры нужны минимум ${minimum} подключённых игрока.`,
+      );
     r.rematchVotes ??= new Set();
     r.rematchVotes.add(id);
     r.revision++;
-    const active = r.players.filter((p) => p.sockets.size);
-    if (active.length < 2 || !active.every((p) => r.rematchVotes!.has(p.id)))
-      return;
+    if (!active.every((p) => r.rematchVotes!.has(p.id))) return;
+    this.checkTrial(r, active);
     this.queueRating(r);
     for (const p of r.players)
       if (!active.includes(p) && p.subject) this.experience?.release(p.subject);
@@ -752,6 +815,7 @@ export class RoomsService {
       this.catalog.options?.(r.category, r.source) ?? [],
       !!r.sharedAnswer,
     );
+    this.recordTrial(r);
   }
   report(code: string, token: string, reason: string) {
     const id = this.authenticate(code, token),
@@ -800,6 +864,9 @@ export class RoomsService {
       source: r.source,
       hostId: r.hostId,
       revision: r.revision,
+      ranked: !!r.accounts,
+      minimumPlayers:
+        r.format === 'solo' ? 1 : r.quick && (r.quickCapacity ?? 2) > 2 ? 3 : 2,
       capacity:
         r.format === 'solo'
           ? 1
@@ -836,13 +903,18 @@ export class RoomsService {
       throw new ConflictException(
         'Время подключения истекло. Найдите нового соперника.',
       );
+    if (!r.match && (r.format === 'solo' || r.format === 'battle'))
+      this.checkTrial(r);
     r.players.find((p) => p.id === id)!.sockets.add(socketId);
+    r.disconnectedUntil?.delete(id);
+    r.emptySince = undefined;
     if (
       r.format === 'battle' &&
       !r.match &&
       r.players.length === (r.quickCapacity ?? 2) &&
       r.players.every((p) => p.sockets.size)
-    )
+    ) {
+      this.checkTrial(r);
       r.match = new Match(
         this.catalog.deck(
           r.category,
@@ -866,6 +938,8 @@ export class RoomsService {
         this.catalog.options?.(r.category, r.source) ?? [],
         !!r.sharedAnswer,
       );
+      this.recordTrial(r);
+    }
     if (r.format === 'solo' && !r.match) this.start(code, token);
     r.revision++;
     return id;
@@ -876,7 +950,21 @@ export class RoomsService {
     const p = r.players.find((p) => p.sockets.has(socketId));
     if (!p) return;
     p.sockets.delete(socketId);
-    if (!p.sockets.size) p.ready = false;
+    if (!p.sockets.size) {
+      p.ready = false;
+      r.rematchVotes?.delete(p.id);
+      if (
+        r.format === 'battle' &&
+        (r.quickCapacity ?? 2) === 2 &&
+        r.match?.active
+      )
+        (r.disconnectedUntil ??= new Map()).set(p.id, Date.now() + 15000);
+    }
+    if (
+      r.format === 'party' &&
+      r.players.every((player) => !player.sockets.size)
+    )
+      r.emptySince ??= Date.now();
     r.revision++;
   }
   ready(code: string, token: string, ready: boolean) {
@@ -884,15 +972,25 @@ export class RoomsService {
     const r = this.room(code);
     if (r.match?.active)
       throw new ConflictException('Готовность меняется между партиями.');
-    r.players.find((p) => p.id === id)!.ready = ready;
+    const player = r.players.find((p) => p.id === id)!;
+    if (ready && player.subject)
+      this.experience?.assertTrial(player.subject, 'online');
+    player.ready = ready;
     r.revision++;
+  }
+  private departure(r: Room, id: string) {
+    if (r.format === 'battle' && (r.quickCapacity ?? 2) === 2)
+      r.match?.finishDeparture(id, Date.now());
+    else r.match?.leave(id, Date.now());
+    this.queueRating(r, id);
   }
   leave(code: string, token: string) {
     const id = this.authenticate(code, token);
     const r = this.room(code);
-    this.queueRating(r, id);
+    r.disconnectedUntil?.delete(id);
+    this.departure(r, id);
     void this.flushRatings();
-    r.match?.leave(id, Date.now());
+    r.rematchVotes?.delete(id);
     const leaving = r.players.find((p) => p.id === id);
     if (leaving?.subject) this.experience?.release(leaving.subject);
     r.players = r.players.filter((p) => p.id !== id);

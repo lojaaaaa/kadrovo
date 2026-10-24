@@ -2,6 +2,10 @@ packages:
   - apps/*
   - packages/*
 
+overrides:
+  body-parser: 2.4.0
+  multer: 2.5.0
+
 allowBuilds:
   esbuild: true
   sharp: true

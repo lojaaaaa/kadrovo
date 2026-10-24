@@ -63,7 +63,7 @@ export function searchTitles(
   const q = normalizeTitle(query.slice(0, 80));
   if (q.length < 2) return [];
   const limit = q.length < 4 ? 0 : q.length < 8 ? 1 : 2;
-  return entries
+  const ranked = entries
     .filter((entry) => entry.option.category === category)
     .map((entry) => {
       let rank = Infinity;
@@ -91,7 +91,10 @@ export function searchTitles(
         a.option.name.localeCompare(b.option.name, 'ru') ||
         (b.option.year ?? 0) - (a.option.year ?? 0) ||
         a.option.id.localeCompare(b.option.id),
-    )
+    );
+  const exact = ranked.filter((entry) => entry.rank <= 2);
+  // Fuzzy suggestions are useful for typos, not for filling a good prefix search with noise.
+  return (exact.length >= 3 ? exact : ranked)
     .slice(0, 8)
     .map((entry) => entry.option);
 }

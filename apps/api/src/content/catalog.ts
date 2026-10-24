@@ -1,3 +1,4 @@
+import { MediaCache } from './media-cache';
 import type { Response } from 'express';
 import { CatalogRotation } from './rotation';
 import { allowedImageUrl } from './images';
@@ -72,7 +73,7 @@ export class ContentCatalog
   private questions: Question[] = [];
   private readonly mediaSecret = randomBytes(32);
   private media = new Map<string, { path: string; pixel?: number }>();
-  private pixelCache = new Map<string, Buffer>();
+  private imageCache = new MediaCache();
   private timer?: ReturnType<typeof setInterval>;
   private busy = false;
   private ready = false;
@@ -192,6 +193,7 @@ export class ContentCatalog
         orderBy: { updatedAt: 'desc' },
         include: { title: true },
       });
+      const rowsById = new Map(rows.map((row) => [row.id, row]));
       const assets = await this.store.db.asset.findMany({
         where: {
           id: { in: [...new Set(published.flatMap((p) => p.sourceAssetIds))] },
@@ -237,7 +239,7 @@ export class ContentCatalog
             }),
           );
           const posterUrl = safePoster(
-            rows.find((r) => r.id === p.titleId)?.assets[0]?.sourceUrl,
+            rowsById.get(p.titleId)?.assets[0]?.sourceUrl,
           );
           const q = byTitle.get(p.titleId) ?? {
             title: {
@@ -253,10 +255,10 @@ export class ContentCatalog
             demo: false,
           };
           q[p.mode] = images;
-          if (p.mode === 'frames')
+          if (p.mode === 'spotlight')
             q.pixels = [0, 1, 2, 3, 4].map((stage) =>
               register(
-                p.stageFiles[0]!,
+                p.stageFiles[4]!,
                 `${p.updatedAt.toISOString()}:${pixelVersion}`,
                 stage,
               ),
@@ -290,14 +292,13 @@ export class ContentCatalog
         }
       this.questions = [...byTitle.values()];
       this.media = nextMedia;
-      for (const key of this.pixelCache.keys())
-        if (!nextMedia.has(key)) this.pixelCache.delete(key);
+      this.imageCache.retain(new Set(nextMedia.keys()));
       this.ready = true;
     } catch {
-      this.ready = false;
-      this.questions = [];
       this.logger.warn(
-        'Кинокаталог недоступен. Демоподборка продолжает работать.',
+        this.ready
+          ? 'Обновление каталога недоступно. Используем последнюю загруженную версию.'
+          : 'Кинокаталог недоступен. Демоподборка продолжает работать.',
       );
     } finally {
       this.busy = false;
@@ -318,16 +319,12 @@ export class ContentCatalog
   async image(key: string) {
     const media = this.media.get(key);
     if (!media) throw new NotFoundException('Изображение недоступно.');
-    if (media.pixel === undefined) return this.readMedia(media.path);
-    let cached = this.pixelCache.get(key);
-    if (!cached) {
-      cached = await pixelImage(await this.readMedia(media.path), media.pixel);
-      if (this.pixelCache.size >= 64)
-        this.pixelCache.delete(this.pixelCache.keys().next().value!);
-      this.pixelCache.set(key, cached);
-    }
-    return cached;
+    return this.imageCache.get(key, async () => {
+      const bytes = await this.readMedia(media.path);
+      return media.pixel === undefined ? bytes : pixelImage(bytes, media.pixel);
+    });
   }
+
   async daily() {
     const day = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'Europe/Moscow',

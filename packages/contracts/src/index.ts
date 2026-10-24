@@ -152,6 +152,8 @@ export const kickPlayerSchema = z
   .object({ playerId: z.string().uuid() })
   .strict();
 export type RoomSnapshot = {
+  ranked?: boolean;
+  minimumPlayers?: number;
   name?: string;
   sharedAnswer?: boolean;
   tastes?: CollectionId[];
@@ -215,6 +217,11 @@ export type RoundReview = {
   hints: number;
 };
 export type GameSnapshot = {
+  termination?: {
+    reason: 'aborted' | 'forfeit';
+    playerId: string;
+    winnerId?: string;
+  };
   history?: RoundReview[];
   sharedAnswer?: boolean;
   captainId?: string;
@@ -287,3 +294,11 @@ export type ContentAvailability = {
 };
 
 export { dailyWindow, isArchiveDay } from './daily';
+export type { ChronologyFilm, ChronologySnapshot } from './chronology';
+
+export {
+  emailInput,
+  passwordInput,
+  nicknameInput,
+  registrationInput,
+} from './auth';

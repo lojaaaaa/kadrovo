@@ -32,6 +32,7 @@ export class Match {
   private players: Participant[];
   private choiceRounds = new Map<number, TitleOption[]>();
   private departed = new Set<string>();
+  private termination?: GameSnapshot['termination'];
   private reviews = new Map<string, NonNullable<GameSnapshot['history']>>();
   private archived = new Set<number>();
   private archive() {
@@ -348,6 +349,31 @@ export class Match {
     }
     return result;
   }
+  finishDeparture(playerId: string, now: number) {
+    this.advance(now);
+    if (
+      this.phase === 'finished' ||
+      !this.players.some((p) => p.playerId === playerId)
+    )
+      return;
+    const aborted =
+      this.index === 0 && this.players.every((p) => p.score === 0);
+    this.termination = {
+      reason: aborted ? 'aborted' : 'forfeit',
+      playerId,
+      ...(!aborted
+        ? {
+            winnerId: this.players.find((p) => p.playerId !== playerId)
+              ?.playerId,
+          }
+        : {}),
+    };
+    if (!aborted) this.archive();
+    this.phase = 'finished';
+    this.stage = 4;
+    this.nextAt = now;
+    this.departed.add(playerId);
+  }
   leave(playerId: string, now: number) {
     this.advance(now);
     this.departed.add(playerId);
@@ -384,6 +410,7 @@ export class Match {
           : 'spotlight'
         : this.mode;
     return {
+      termination: this.termination,
       sharedAnswer: this.cooperative,
       answerMode: this.answerMode,
       ...(this.answerMode === 'choices'

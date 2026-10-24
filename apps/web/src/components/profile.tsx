@@ -85,7 +85,9 @@ export function Profile() {
   const logout = useMutation({
     mutationFn: () => api('auth/logout', 'POST'),
     onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ['account'] });
+      void client.resetQueries({ queryKey: ['account'] });
+      void client.resetQueries({ queryKey: ['experience'] });
+      void client.resetQueries({ queryKey: ['daily-archive'] });
     },
   });
   return (

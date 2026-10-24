@@ -1,4 +1,7 @@
 'use client';
+import { useQueries } from '@tanstack/react-query';
+import { api } from '@/lib/account';
+import { SectionSkeleton } from './section-skeleton';
 import { ResumeGame } from './resume-game';
 import Link from 'next/link';
 import { ArrowRight, Clapperboard, Users, Settings2 } from 'lucide-react';
@@ -35,6 +38,37 @@ function FilmWindows({ online = false }: { online?: boolean }) {
 }
 
 export function HomeDashboard() {
+  const queries = useQueries({
+    queries: [
+      { queryKey: ['account'], queryFn: () => api('auth/me') },
+      {
+        queryKey: ['experience'],
+        queryFn: () => api('experience'),
+        staleTime: 5000,
+      },
+      {
+        queryKey: ['content-availability'],
+        queryFn: () => api('content/availability'),
+      },
+    ],
+  });
+  if (
+    queries.some((q) => q.isPending || (q.isFetching && !q.isFetchedAfterMount))
+  )
+    return (
+      <main className="home-screen">
+        <SectionSkeleton kind="home" />
+      </main>
+    );
+  if (queries.some((q) => q.error))
+    return (
+      <main className="home-screen">
+        <p role="alert">Не удалось загрузить страницу.</p>
+        <button onClick={() => queries.forEach((q) => void q.refetch())}>
+          Повторить
+        </button>
+      </main>
+    );
   return (
     <main className="home-screen">
       <ResumeGame />

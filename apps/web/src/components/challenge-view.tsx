@@ -1,4 +1,5 @@
 'use client';
+import { SectionSkeleton } from './section-skeleton';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { modeLabels, type RoomSession } from '@filmless/contracts';
@@ -37,7 +38,7 @@ export function ChallengeView({ id }: { id: string }) {
     <section className="space-y-5">
       <h1 className="text-3xl font-bold">Вызов другу</h1>
       {info.isPending ? (
-        <p role="status">Загружаем вызов…</p>
+        <SectionSkeleton kind="form" />
       ) : info.error ? (
         <p role="alert">{info.error.message}</p>
       ) : (

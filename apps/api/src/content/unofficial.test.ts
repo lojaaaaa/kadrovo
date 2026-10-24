@@ -86,3 +86,14 @@ it('retries a transient connection failure once without retrying HTTP quota fail
   expect(page.ids).toEqual(['301']);
   expect(request).toHaveBeenCalledTimes(2);
 });
+it('fetches stills for an existing title without spending a second request on known metadata', async () => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      items: [{ imageUrl: 'https://image.tmdb.org/frame.jpg' }],
+    }),
+  );
+  const frames = await new UnofficialClient('test', request).stills('301');
+  expect(frames).toHaveLength(1);
+  expect(request).toHaveBeenCalledOnce();
+  expect(String(request.mock.calls[0]![0])).toContain('/301/images?');
+});

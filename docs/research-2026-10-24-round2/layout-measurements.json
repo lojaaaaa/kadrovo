@@ -1,0 +1,172 @@
+[
+  {
+    "answer": {
+      "bottom": 349,
+      "height": 162,
+      "left": 1235.5,
+      "right": 1575.5,
+      "top": 187,
+      "width": 340,
+      "x": 1235.5,
+      "y": 187
+    },
+    "board": {
+      "bottom": 894,
+      "height": 810,
+      "left": 312.5,
+      "right": 1592.5,
+      "top": 84,
+      "width": 1280,
+      "x": 312.5,
+      "y": 84
+    },
+    "image": {
+      "bottom": 727,
+      "height": 540,
+      "left": 329.5,
+      "right": 1215.5,
+      "top": 187,
+      "width": 886,
+      "x": 329.5,
+      "y": 187
+    },
+    "page": [1905, 1080],
+    "size": [1920, 1080]
+  },
+  {
+    "answer": {
+      "bottom": 895.375,
+      "height": 154,
+      "left": 29,
+      "right": 724,
+      "top": 741.375,
+      "width": 695,
+      "x": 29,
+      "y": 741.375
+    },
+    "board": {
+      "bottom": 954.375,
+      "height": 872.375,
+      "left": 12,
+      "right": 741,
+      "top": 82,
+      "width": 729,
+      "x": 12,
+      "y": 82
+    },
+    "image": {
+      "bottom": 619.375,
+      "height": 434.375,
+      "left": 29,
+      "right": 724,
+      "top": 185,
+      "width": 695,
+      "x": 29,
+      "y": 185
+    },
+    "page": [753, 1024],
+    "size": [768, 1024]
+  },
+  {
+    "answer": {
+      "bottom": 660.125,
+      "height": 154,
+      "left": 25,
+      "right": 350,
+      "top": 506.125,
+      "width": 325,
+      "x": 25,
+      "y": 506.125
+    },
+    "board": {
+      "bottom": 713.125,
+      "height": 633.125,
+      "left": 12,
+      "right": 363,
+      "top": 80,
+      "width": 351,
+      "x": 12,
+      "y": 80
+    },
+    "image": {
+      "bottom": 380.125,
+      "height": 203.125,
+      "left": 25,
+      "right": 350,
+      "top": 177,
+      "width": 325,
+      "x": 25,
+      "y": 177
+    },
+    "page": [375, 844],
+    "size": [390, 844]
+  },
+  {
+    "answer": {
+      "bottom": 679.375,
+      "height": 154,
+      "left": 25,
+      "right": 320,
+      "top": 525.375,
+      "width": 295,
+      "x": 25,
+      "y": 525.375
+    },
+    "board": {
+      "bottom": 732.375,
+      "height": 652.375,
+      "left": 12,
+      "right": 333,
+      "top": 80,
+      "width": 321,
+      "x": 12,
+      "y": 80
+    },
+    "image": {
+      "bottom": 361.375,
+      "height": 184.375,
+      "left": 25,
+      "right": 320,
+      "top": 177,
+      "width": 295,
+      "x": 25,
+      "y": 177
+    },
+    "page": [345, 740],
+    "size": [360, 640]
+  },
+  {
+    "answer": {
+      "bottom": 942.875,
+      "height": 154,
+      "left": 29,
+      "right": 800,
+      "top": 788.875,
+      "width": 771,
+      "x": 29,
+      "y": 788.875
+    },
+    "board": {
+      "bottom": 1001.875,
+      "height": 919.875,
+      "left": 12,
+      "right": 817,
+      "top": 82,
+      "width": 805,
+      "x": 12,
+      "y": 82
+    },
+    "image": {
+      "bottom": 666.875,
+      "height": 481.875,
+      "left": 29,
+      "right": 800,
+      "top": 185,
+      "width": 771,
+      "x": 29,
+      "y": 185
+    },
+    "page": [829, 1010],
+    "size": [844, 390]
+  }
+]

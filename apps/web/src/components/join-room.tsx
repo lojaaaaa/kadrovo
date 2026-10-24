@@ -6,13 +6,17 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { parseRoomCode } from '@/lib/room-code';
-export function JoinRoomForm() {
+export function JoinRoomForm({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const [value, setValue] = useState('');
   const [error, setError] = useState(false);
   return (
     <form
-      className="rounded-2xl border border-border/70 surface-panel bg-card p-6"
+      className={
+        compact
+          ? 'join-room-compact'
+          : 'rounded-2xl border border-border/70 surface-panel bg-card p-6'
+      }
       onSubmit={(e) => {
         e.preventDefault();
         const code = parseRoomCode(value);
@@ -23,7 +27,7 @@ export function JoinRoomForm() {
         router.push(`/room/${code}`);
       }}
     >
-      <Label htmlFor="join-code">Друзья уже играют?</Label>
+      <Label htmlFor="join-code">Войти по приглашению</Label>
       <div className="mt-3 flex flex-col gap-3 sm:flex-row">
         <Input
           id="join-code"
@@ -40,7 +44,7 @@ export function JoinRoomForm() {
         />
         <Button type="submit" variant="outline" disabled={!value.trim()}>
           <LogIn />
-          Войти по коду
+          Войти
         </Button>
       </div>
       {error && (

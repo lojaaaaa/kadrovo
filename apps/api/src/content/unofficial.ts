@@ -111,10 +111,14 @@ export class UnofficialClient {
     const title =
       this.discovered.get(id) ??
       movie.parse(await this.get('/api/v2.2/films/' + id));
+    return this.metadata(title, await this.stills(id));
+  }
+  async stills(id: string) {
+    if (!/^\d{1,12}$/.test(id)) throw new Error('Некорректный ID');
     const images = z
-      .object({ items: z.array(z.object({ imageUrl: z.string() })) })
+      .object({ items: z.array(z.object({ imageUrl: z.string() })).max(100) })
       .parse(await this.get(`/api/v2.2/films/${id}/images?type=STILL&page=1`));
-    return this.metadata(title, images.items);
+    return images.items;
   }
   cachedTitle(id: string) {
     const title = this.discovered.get(id);

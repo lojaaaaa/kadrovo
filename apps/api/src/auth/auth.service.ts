@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { avatarUrl, prepareAvatar } from './avatar';
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   OnModuleDestroy,
@@ -48,10 +49,22 @@ export class AuthService implements OnModuleDestroy {
     await this.store.db.authChallenge.deleteMany({ where: { expiresAt } });
   }
   async updateProfile(id: string, nickname: string) {
-    return publicAccount(
-      await this.store.db.account.update({ where: { id }, data: { nickname } }),
-    );
+    return this.store.db.$transaction(async (db) => {
+      await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`nickname:${nickname.toLowerCase()}`}, 0))`;
+      const named = await db.account.findFirst({
+        where: {
+          nickname: { equals: nickname, mode: 'insensitive' },
+          id: { not: id },
+        },
+      });
+      if (named)
+        throw new ConflictException('Этот ник уже занят. Выберите другой.');
+      return publicAccount(
+        await db.account.update({ where: { id }, data: { nickname } }),
+      );
+    });
   }
+
   async updateAvatar(id: string, image: string | null) {
     const avatar = image === null ? null : await prepareAvatar(image);
     return publicAccount(
@@ -123,28 +136,37 @@ export class AuthService implements OnModuleDestroy {
     const verificationRequired =
       process.env.EMAIL_VERIFICATION_REQUIRED === 'true';
     if (verificationRequired) this.mailConfigured();
-    const existing = await this.store.db.account.findUnique({
-      where: { email },
-    });
-    if (existing && (!verificationRequired || existing.emailVerifiedAt))
-      return {
-        message: 'Если аккаунт уже существует, войдите с вашим паролем.',
-      };
     const passwordHash = await hashPassword(password);
-    const account = await this.store.db.account.upsert({
-      where: { email },
-      create: {
-        email,
-        passwordHash,
-        nickname,
-      },
-      update: {},
+    const account = await this.store.db.$transaction(async (db) => {
+      // Serialize registrations for the same address or case-insensitive nickname.
+      await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`email:${email}`}, 0))`;
+      await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`nickname:${nickname.toLowerCase()}`}, 0))`;
+      const existing = await db.account.findUnique({ where: { email } });
+      if (existing && (!verificationRequired || existing.emailVerifiedAt))
+        throw new ConflictException(
+          'Эта почта уже зарегистрирована. Войдите в аккаунт.',
+        );
+      const named = await db.account.findFirst({
+        where: {
+          nickname: { equals: nickname, mode: 'insensitive' },
+          ...(existing ? { id: { not: existing.id } } : {}),
+        },
+      });
+      if (named)
+        throw new ConflictException('Этот ник уже занят. Выберите другой.');
+      return (
+        existing ??
+        db.account.create({ data: { email, passwordHash, nickname } })
+      );
     });
     if (verificationRequired && !account.emailVerifiedAt)
       await this.sendChallenge(account.id, email, 'verify', passwordHash);
     return verificationRequired
       ? genericMail
-      : { message: 'Аккаунт создан. Теперь войдите с почтой и паролем.' };
+      : {
+          token: await this.issue(account.id, account.authVersion),
+          account: publicAccount(account),
+        };
   }
   async login(email: string, password: string) {
     const a = await this.store.db.account.findUnique({ where: { email } });

@@ -1,19 +1,13 @@
 'use client';
+import { AnswerChoice } from './answer-choice';
+import type { ExperienceSummary } from './experience-panel';
+import { ArrowLeftRight } from 'lucide-react';
 import { SectionSkeleton } from './section-skeleton';
-import {
-  Film,
-  ScanSearch,
-  Grid2X2,
-  Shuffle,
-  TextCursorInput,
-  ListChecks,
-  Play,
-} from 'lucide-react';
+import { Film, ScanSearch, Grid2X2, Shuffle, Play } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
-  collectionDefinitions,
   modeLabels,
   type CreateRoom,
   type ContentAvailability,
@@ -33,12 +27,9 @@ export function SoloLaunch({
   initialCollection: NonNullable<CreateRoom['collection']>;
 }) {
   const router = useRouter();
-  const [selectedCollection, setSelectedCollection] =
-    useState(initialCollection);
-  const [weekly] = useState(
-    () => collectionDefinitions[1 + (Math.floor(Date.now() / 604800000) % 5)]!,
-  );
-
+  const [advanced, setAdvanced] = useState(false);
+  const [chronology, setChronology] = useState(false);
+  const selectedCollection = initialCollection;
   const [answerMode, setAnswerMode] = useState<'search' | 'choices'>('search');
   const [mode, setMode] = useState(initialMode);
   const account = useQuery({
@@ -59,6 +50,11 @@ export function SoloLaunch({
           (c) => c.category === initialCategory,
         )?.[mode] ?? 0)
       : 0);
+  const progress = useQuery({
+    queryKey: ['experience'],
+    queryFn: () => api<ExperienceSummary>('experience'),
+    staleTime: 5000,
+  });
   const queueAtLaunch = useRef(false);
   const play = useMutation({
     mutationFn: () => {
@@ -91,11 +87,20 @@ export function SoloLaunch({
       router.push('/room/' + s.code);
     },
   });
-  if (availability.isPending) return <SectionSkeleton kind="form" />;
+  if (
+    availability.isPending ||
+    account.isPending ||
+    progress.isPending ||
+    (progress.isFetching && !progress.isFetchedAfterMount)
+  )
+    return <SectionSkeleton kind="form" />;
   return (
-    <div className="solo-launch space-y-4">
-      <section className="rounded-2xl border surface-panel bg-card p-6">
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="solo-launch solo-launch-v2 space-y-4">
+      <section
+        hidden={advanced}
+        className="rounded-2xl border surface-panel bg-card p-6"
+      >
+        <div className="solo-game-grid">
           {Object.entries(modeLabels).map(([id, label]) => {
             const Icon = {
               frames: Film,
@@ -113,9 +118,12 @@ export function SoloLaunch({
               <Button
                 key={id}
                 className="solo-mode-option"
-                variant={mode === id ? 'default' : 'outline'}
-                aria-pressed={mode === id}
-                onClick={() => setMode(id as CreateRoom['mode'])}
+                variant={!chronology && mode === id ? 'default' : 'outline'}
+                aria-pressed={!chronology && mode === id}
+                onClick={() => {
+                  setChronology(false);
+                  setMode(id as CreateRoom['mode']);
+                }}
               >
                 <Icon size={23} aria-hidden="true" />
                 <span className="solo-mode-name">{label}</span>
@@ -123,50 +131,44 @@ export function SoloLaunch({
               </Button>
             );
           })}
+          <Button
+            className="solo-mode-option"
+            variant={chronology ? 'default' : 'outline'}
+            aria-pressed={chronology}
+            onClick={() => setChronology(true)}
+          >
+            <ArrowLeftRight size={23} aria-hidden="true" />
+            <span className="solo-mode-name">Раньше или позже</span>
+            <span className="solo-mode-description">
+              Сравнивать годы выхода
+            </span>
+          </Button>
         </div>
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          {(['search', 'choices'] as const).map((value) => (
-            <Button
-              key={value}
-              aria-pressed={answerMode === value}
-              variant={answerMode === value ? 'default' : 'outline'}
-              onClick={() => setAnswerMode(value)}
-            >
-              {value === 'search' ? (
-                <TextCursorInput aria-hidden="true" />
-              ) : (
-                <ListChecks aria-hidden="true" />
-              )}
-              {value === 'search' ? 'Ввод названия' : 'Выбор из 4'}
-            </Button>
-          ))}
-        </div>
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Подборка недели:</span>
-          <button
-            className="taste-chip"
-            type="button"
-            aria-pressed={selectedCollection === weekly.id}
+        <div className="solo-launch-toolbar">
+          {!chronology && (
+            <AnswerChoice value={answerMode} onChange={setAnswerMode} />
+          )}
+          {progress.data?.access?.guest && (
+            <span className="guest-remaining">
+              Без входа: осталось {progress.data.access.soloRemaining} игр
+            </span>
+          )}
+          <Button
+            className="solo-play-button h-11 text-base"
+            disabled={
+              play.isPending ||
+              availability.isPending ||
+              (!chronology && availableCount < 3)
+            }
             onClick={() =>
-              setSelectedCollection(
-                selectedCollection === weekly.id ? 'all' : weekly.id,
-              )
+              chronology ? router.push('/play/chronology') : play.mutate()
             }
           >
-            {weekly.name}
-          </button>
+            <Play aria-hidden="true" />
+            {play.isPending ? 'Начинаем…' : 'Играть'}
+          </Button>
         </div>
-        <Button
-          className="h-12 w-full text-base"
-          disabled={
-            play.isPending || availability.isPending || availableCount < 3
-          }
-          onClick={() => play.mutate()}
-        >
-          <Play aria-hidden="true" />
-          {play.isPending ? 'Начинаем…' : 'Играть'}
-        </Button>
-        {availableCount < 3 && (
+        {!chronology && availableCount < 3 && (
           <p className="mt-3 text-sm text-muted-foreground">
             Для выбранного режима пока недостаточно фильмов. Выберите другую
             подборку.
@@ -178,14 +180,20 @@ export function SoloLaunch({
           </p>
         )}
       </section>
-      <details className="rounded-2xl border p-4">
+      <details
+        hidden={chronology}
+        className="rounded-2xl border p-4"
+        onToggle={(event) => setAdvanced(event.currentTarget.open)}
+      >
         <summary className="cursor-pointer font-medium">Настроить игру</summary>
         <div className="mt-5">
           <CreateRoomForm
+            key={`${mode}:${answerMode}:${selectedCollection}`}
             initialFormat="solo"
+            initialAnswerMode={answerMode}
             initialMode={mode}
             initialCategory={initialCategory}
-            initialCollection={initialCollection}
+            initialCollection={selectedCollection}
           />
         </div>
       </details>

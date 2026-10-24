@@ -18,21 +18,23 @@ export class BattleService {
     string,
     Entry & { kind: 'duel' | 'group'; queuedAt?: number }
   >();
-  quickStatus(id: string) {
+  private pruneQuick() {
     for (const [key, e] of this.quick)
       if (
         (e.touched + 30000 < Date.now() && !e.session) ||
         (e.session && !this.rooms.battleAvailable(e.session))
       )
         this.quick.delete(key);
+  }
+  quickStatus(id: string) {
+    this.pruneQuick();
     const group = [...this.quick.values()].filter(
       (e) => e.kind === 'group' && !e.session,
     );
     if (
-      group.length >= 2 &&
+      group.length >= 3 &&
       (group.length >= 8 ||
-        Math.min(...group.map((e) => e.queuedAt ?? Date.now())) + 8000 <=
-          Date.now())
+        (group[2]!.queuedAt ?? Date.now()) + 8000 <= Date.now())
     ) {
       const batch = group.slice(0, 8);
       const sessions = this.rooms.createQuick(
@@ -54,11 +56,39 @@ export class BattleService {
           waiting: [...this.quick.values()].filter(
             (e) => e.kind === entry.kind && !e.session,
           ).length,
-          required: entry.kind === 'duel' ? 2 : 8,
+          required: entry.kind === 'duel' ? 2 : 3,
+          capacity: entry.kind === 'duel' ? 2 : 8,
+          startsIn:
+            entry.kind === 'group' && group.length >= 3
+              ? Math.max(
+                  0,
+                  Math.ceil(
+                    ((group[2]!.queuedAt ?? Date.now()) + 8000 - Date.now()) /
+                      1000,
+                  ),
+                )
+              : undefined,
         };
   }
-  quickJoin(account: { id: string; nickname: string }, kind: 'duel' | 'group') {
-    this.quickStatus(account.id);
+  quickJoin(
+    account: { id: string; nickname: string; subject?: string },
+    kind: 'duel' | 'group',
+  ) {
+    this.prune();
+    this.pruneQuick();
+    if (this.entries.get(account.id)?.session)
+      throw new ConflictException(
+        'У вас уже найдена рейтинговая дуэль. Завершите её или выйдите из комнаты.',
+      );
+    this.entries.delete(account.id);
+    const existing = this.quick.get(account.id);
+    if (existing && existing.kind !== kind) {
+      if (existing.session)
+        throw new ConflictException(
+          'Игра уже найдена. Завершите её или выйдите из комнаты.',
+        );
+      this.quick.delete(account.id);
+    }
     if (this.quick.has(account.id)) return this.quickStatus(account.id);
     if (this.quick.size >= 400)
       throw new ServiceUnavailableException('Очередь заполнена.');
@@ -66,7 +96,7 @@ export class BattleService {
       this.quick.set(account.id, {
         kind,
         nickname: account.nickname,
-        subject: 'account:' + account.id,
+        subject: account.subject ?? 'account:' + account.id,
         touched: Date.now(),
         queuedAt: Date.now(),
       });
@@ -79,7 +109,7 @@ export class BattleService {
     if (peers.length === needed - 1) {
       const sessions = this.rooms.createQuick([
         ...peers.map(([, e]) => ({ nickname: e.nickname, subject: e.subject })),
-        { ...account, subject: 'account:' + account.id },
+        { ...account, subject: account.subject ?? 'account:' + account.id },
       ]);
       peers.forEach(([, e], i) => {
         e.session = sessions[i];
@@ -88,7 +118,7 @@ export class BattleService {
       this.quick.set(account.id, {
         kind,
         nickname: account.nickname,
-        subject: 'account:' + account.id,
+        subject: account.subject ?? 'account:' + account.id,
         touched: Date.now(),
         session: sessions[needed - 1],
       });
@@ -96,12 +126,13 @@ export class BattleService {
       this.quick.set(account.id, {
         kind,
         nickname: account.nickname,
-        subject: 'account:' + account.id,
+        subject: account.subject ?? 'account:' + account.id,
         touched: Date.now(),
       });
     return this.quickStatus(account.id);
   }
   quickCancel(id: string) {
+    this.pruneQuick();
     if (this.quick.get(id)?.session)
       throw new ConflictException('Игра уже найдена.');
     this.quick.delete(id);
@@ -128,6 +159,12 @@ export class BattleService {
   }
   join(account: { id: string; nickname: string }) {
     this.prune();
+    this.pruneQuick();
+    if (this.quick.get(account.id)?.session)
+      throw new ConflictException(
+        'У вас уже найдена игра без рейтинга. Завершите её или выйдите из комнаты.',
+      );
+    this.quick.delete(account.id);
     if (this.entries.has(account.id)) return this.status(account.id);
     if (this.entries.size >= 400)
       throw new ServiceUnavailableException(

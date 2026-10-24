@@ -26,6 +26,16 @@ function fixture() {
   return catalog;
 }
 describe('catalog collections', () => {
+  it('retains the last playable catalog when a background refresh fails', async () => {
+    const catalog = fixture();
+    const before = catalog.availability();
+    await catalog.refresh();
+    expect(catalog.availability()).toEqual(before);
+    expect(catalog.deck('movies', 'frames', 'catalog')).toHaveLength(3);
+    const cold = new ContentCatalog(new DemoCatalog(), {} as CatalogStore);
+    await cold.refresh();
+    expect(cold.availability().ready).toBe(false);
+  });
   it('selects three distinct films only within the chosen decade', () => {
     const deck = fixture().deck('movies', 'frames', 'catalog', 'nineties');
     expect(deck.map((q) => q.title.year).sort()).toEqual([1990, 1995, 1999]);

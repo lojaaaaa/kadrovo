@@ -31,7 +31,7 @@ export default async function PlayPage({
 
   return (
     <main className="screen screen--play mx-auto max-w-5xl px-5 py-6 md:py-8">
-      <div className="flex items-start gap-4 mb-6">
+      <div className="play-page-heading mb-6">
         <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10">
           <Icon className="size-6 text-primary" />
         </span>
@@ -39,11 +39,11 @@ export default async function PlayPage({
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">
             {isSolo ? 'Одиночная игра' : 'Создать комнату'}
           </h1>
-          <p className="mt-2 text-muted-foreground leading-relaxed">
-            {isSolo
-              ? 'Выберите режим и нажмите «Играть».'
-              : 'Настройте комнату и поделитесь ссылкой. Друзья присоединятся без регистрации.'}
-          </p>
+          {isSolo && (
+            <p className="mt-2 text-muted-foreground leading-relaxed">
+              Выберите режим и нажмите «Играть».
+            </p>
+          )}
         </div>
       </div>
 

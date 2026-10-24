@@ -1,4 +1,7 @@
 'use client';
+import { AnswerChoice } from './answer-choice';
+import { CompanyTastes } from './company-tastes';
+import { Skeleton } from './ui/skeleton';
 import { HelpTip } from './ui/help-tip';
 import { CollectionPicker } from './collection-picker';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -265,22 +268,11 @@ export function PartyLobby({
           </label>
           <fieldset disabled={!editable} className="mb-4 space-y-2">
             <legend className="mb-2 text-sm font-semibold">Ответы</legend>
-            <div className="grid grid-cols-2 gap-2">
-              {(['search', 'choices'] as const).map((value) => (
-                <Button
-                  key={value}
-                  aria-pressed={(room.answerMode ?? 'search') === value}
-                  variant={
-                    (room.answerMode ?? 'search') === value
-                      ? 'default'
-                      : 'outline'
-                  }
-                  onClick={() => update.mutate({ answerMode: value })}
-                >
-                  {value === 'search' ? 'Ввод названия' : 'Выбор из 4'}
-                </Button>
-              ))}
-            </div>
+            <AnswerChoice
+              value={room.answerMode ?? 'search'}
+              disabled={!editable}
+              onChange={(answerMode) => update.mutate({ answerMode })}
+            />
           </fieldset>
           <fieldset disabled={!editable} className="min-w-0 space-y-3">
             <legend className="mb-3 text-xs uppercase tracking-widest text-muted-foreground">
@@ -400,12 +392,17 @@ export function PartyLobby({
               </div>
             </details>
           )}
+          <CompanyTastes room={room} session={session} getSocket={getSocket} />
           <div className="lobby-content-meta">
-            <span>
-              {room.source === 'catalog'
-                ? `${count} фильмов доступно`
-                : 'Демоподборка'}
-            </span>
+            {availability.isPending ? (
+              <Skeleton className="h-4 w-36" />
+            ) : (
+              <span>
+                {room.source === 'catalog'
+                  ? `${count} фильмов доступно`
+                  : 'Демоподборка'}
+              </span>
+            )}
             <HelpTip label="Как начисляются очки">
               За фильм — до 20 очков. Новый кадр отнимает 5 секунд и 4 очка.
               Кадры и таймер у каждого игрока свои.
@@ -436,7 +433,8 @@ export function PartyLobby({
               className="h-12 font-bold"
               disabled={
                 !connected ||
-                room.players.filter((p) => p.connected).length < 2 ||
+                room.players.filter((p) => p.connected).length <
+                  (room.minimumPlayers ?? 2) ||
                 starting ||
                 update.isPending
               }

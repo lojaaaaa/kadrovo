@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation';
+import { BattleLobby } from '@/components/battle-lobby';
 export default function BattlePage() {
-  redirect('/online');
+  return <BattleLobby />;
 }

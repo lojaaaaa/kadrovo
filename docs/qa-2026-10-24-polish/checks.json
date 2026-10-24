@@ -1,0 +1,244 @@
+{
+  "reloadChecks": [
+    {
+      "run": 1,
+      "wrongPrompt": false,
+      "result": true,
+      "skeleton": false
+    },
+    {
+      "run": 2,
+      "wrongPrompt": false,
+      "result": false,
+      "skeleton": false
+    },
+    {
+      "run": 3,
+      "wrongPrompt": false,
+      "result": false,
+      "skeleton": false
+    }
+  ],
+  "allRoutes": [
+    {
+      "h": 768,
+      "route": "/",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/play/solo",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/online",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/lobbies",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/play/party",
+      "scroll": 1150,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/profile",
+      "scroll": 868,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/account",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/collections",
+      "scroll": 1493,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/modes",
+      "scroll": 1006,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/ratings",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/play/chronology",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 640,
+      "route": "/",
+      "scroll": 859,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/play/solo",
+      "scroll": 978,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/online",
+      "scroll": 972,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/lobbies",
+      "scroll": 640,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/play/party",
+      "scroll": 2018,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/profile",
+      "scroll": 1334,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/account",
+      "scroll": 640,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/collections",
+      "scroll": 2979,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/modes",
+      "scroll": 1981,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/ratings",
+      "scroll": 1031,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/play/chronology",
+      "scroll": 640,
+      "sw": 349,
+      "w": 360
+    }
+  ],
+  "finalForm": {
+    "form": 563.5,
+    "h": 768,
+    "route": "/play/party",
+    "scroll": 768,
+    "sw": 1355,
+    "w": 1366
+  },
+  "finalRoutes": [
+    {
+      "h": 768,
+      "route": "/play/solo",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/lobbies",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/profile",
+      "scroll": 969,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 768,
+      "route": "/play/party",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 640,
+      "route": "/play/solo",
+      "scroll": 871,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/lobbies",
+      "scroll": 640,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/profile",
+      "scroll": 1334,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 640,
+      "route": "/play/party",
+      "scroll": 1518,
+      "sw": 349,
+      "w": 360
+    }
+  ]
+}

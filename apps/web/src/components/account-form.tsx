@@ -1,4 +1,7 @@
 'use client';
+import { registrationInput } from '@filmless/contracts';
+import { useRouter } from 'next/navigation';
+import { PasswordInput } from './password-input';
 import { SectionSkeleton } from './section-skeleton';
 import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
@@ -11,8 +14,8 @@ import { Label } from './ui/label';
 const socialLoginVisible = false;
 type Mode = 'login' | 'register' | 'forgot' | 'verify' | 'reset';
 const titles: Record<Mode, string> = {
-  login: 'С возвращением',
-  register: 'Ваш билет в игру',
+  login: 'Вход',
+  register: 'Регистрация',
   forgot: 'Забыли пароль?',
   verify: 'Подтвердите почту',
   reset: 'Новый пароль',
@@ -26,6 +29,8 @@ function subscribeLocation(listener: () => void) {
   };
 }
 export function AccountForm() {
+  const router = useRouter();
+  const [validation, setValidation] = useState<Record<string, string>>({});
   const [selectedMode, setMode] = useState<Mode>('login');
   const location = useSyncExternalStore(
     subscribeLocation,
@@ -39,6 +44,17 @@ export function AccountForm() {
       ? 'reset'
       : selectedMode;
   const token = hash.get(mode) ?? '';
+  const reason = new URLSearchParams(location.split('#')[0]).get('reason');
+  const accessMessage =
+    reason === 'guest-solo'
+      ? 'Вы сыграли 5 гостевых соло-игр. Войдите или создайте аккаунт, чтобы продолжить.'
+      : reason === 'guest-online'
+        ? 'Вы сыграли 3 гостевые игры онлайн. Войдите или создайте аккаунт, чтобы продолжить.'
+        : reason === 'ranked'
+          ? 'Рейтинговые дуэли доступны после входа в аккаунт.'
+          : reason === 'create-lobby'
+            ? 'Для создания открытой комнаты нужен аккаунт. Закрытая комната доступна без регистрации.'
+            : '';
   const oauthError = new URLSearchParams(location.split('#')[0]).has('error');
   const [email, setEmail] = useState(''),
     [password, setPassword] = useState(''),
@@ -61,15 +77,36 @@ export function AccountForm() {
               ? { email }
               : { email, password, nickname },
       ),
-    onSuccess: () => {
+    onSuccess: async () => {
       setPassword('');
-      void client.invalidateQueries({ queryKey: ['account'] });
+      await client.resetQueries({ queryKey: ['account'] });
+      if (
+        (mode === 'register' || mode === 'login') &&
+        client.getQueryData<AccountState>(['account'])?.account
+      )
+        router.replace(
+          reason === 'guest-solo'
+            ? '/play/solo'
+            : reason === 'ranked'
+              ? '/battle'
+              : reason === 'guest-online'
+                ? '/online'
+                : reason === 'create-lobby'
+                  ? '/play/party'
+                  : '/',
+        );
+      void client.resetQueries({ queryKey: ['experience'] });
+      void client.resetQueries({ queryKey: ['daily-archive'] });
+      void client.invalidateQueries({ queryKey: ['ratings'] });
     },
   });
   const logout = useMutation({
     mutationFn: () => api('auth/logout', 'POST'),
     onSuccess: () => {
-      void client.invalidateQueries({ queryKey: ['account'] });
+      void client.resetQueries({ queryKey: ['account'] });
+      void client.resetQueries({ queryKey: ['experience'] });
+      void client.resetQueries({ queryKey: ['daily-archive'] });
+      void client.invalidateQueries({ queryKey: ['ratings'] });
     },
   });
   function switchMode(next: Mode) {
@@ -78,6 +115,7 @@ export function AccountForm() {
     setMode(next);
     setPassword('');
     mutation.reset();
+    setValidation({});
   }
   if (query.isPending)
     return (
@@ -97,6 +135,22 @@ export function AccountForm() {
               {query.data.account.nickname}
             </h1>
             <p className="text-muted-foreground">Вы вошли в аккаунт.</p>
+            {reason && (
+              <Link
+                className="font-semibold text-primary"
+                href={
+                  reason === 'guest-solo'
+                    ? '/play/solo'
+                    : reason === 'create-lobby'
+                      ? '/play/party'
+                      : reason === 'ranked'
+                        ? '/battle'
+                        : '/online'
+                }
+              >
+                Продолжить играть →
+              </Link>
+            )}
             <Link href="/profile" className="font-semibold text-primary">
               Открыть профиль →
             </Link>
@@ -112,13 +166,32 @@ export function AccountForm() {
           <>
             <h1 className="text-3xl font-bold">{titles[mode]}</h1>
             <p className="text-sm text-muted-foreground">
-              Для дуэлей нужен аккаунт. Тренировка и игра с друзьями доступны
-              без регистрации.
+              {accessMessage ||
+                'Войдите, чтобы играть без гостевых ограничений и сохранять прогресс.'}
             </p>
             <form
               className="space-y-4"
               onSubmit={(e) => {
                 e.preventDefault();
+                setValidation({});
+                if (mode === 'register') {
+                  const checked = registrationInput.safeParse({
+                    email,
+                    password,
+                    nickname,
+                  });
+                  if (!checked.success) {
+                    setValidation(
+                      Object.fromEntries(
+                        checked.error.issues.map((issue) => [
+                          String(issue.path[0]),
+                          issue.message,
+                        ]),
+                      ),
+                    );
+                    return;
+                  }
+                }
                 mutation.mutate();
               }}
             >
@@ -129,10 +202,24 @@ export function AccountForm() {
                     id="account-name"
                     autoComplete="nickname"
                     required
+                    minLength={2}
                     maxLength={24}
+                    aria-invalid={!!validation.nickname}
+                    aria-describedby={
+                      validation.nickname ? 'nickname-error' : undefined
+                    }
                     value={nickname}
                     onChange={(e) => setNickname(e.target.value)}
                   />
+                  {validation.nickname && (
+                    <p
+                      id="nickname-error"
+                      role="alert"
+                      className="text-xs text-destructive"
+                    >
+                      {validation.nickname}
+                    </p>
+                  )}
                 </div>
               )}
               {['login', 'register', 'forgot'].includes(mode) && (
@@ -144,9 +231,15 @@ export function AccountForm() {
                     autoComplete="email"
                     required
                     maxLength={254}
+                    aria-invalid={!!validation.email}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
+                  {validation.email && (
+                    <p role="alert" className="text-xs text-destructive">
+                      {validation.email}
+                    </p>
+                  )}
                 </div>
               )}
               {['login', 'register', 'reset'].includes(mode) && (
@@ -154,9 +247,9 @@ export function AccountForm() {
                   <Label htmlFor="account-password">
                     Пароль · от 10 символов
                   </Label>
-                  <Input
+                  <PasswordInput
                     id="account-password"
-                    type="password"
+                    aria-invalid={!!validation.password}
                     autoComplete={
                       mode === 'login' ? 'current-password' : 'new-password'
                     }
@@ -166,6 +259,11 @@ export function AccountForm() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
+                  {validation.password && (
+                    <p role="alert" className="text-xs text-destructive">
+                      {validation.password}
+                    </p>
+                  )}
                 </div>
               )}
               <Button

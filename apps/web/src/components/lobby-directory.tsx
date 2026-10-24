@@ -63,6 +63,7 @@ export function LobbyDirectory() {
           Создать лобби
         </Link>
       </div>
+      <JoinRoomForm compact />
       <Input
         aria-label="Поиск лобби"
         placeholder="Название, ведущий или код"
@@ -122,9 +123,6 @@ export function LobbyDirectory() {
           {join.error?.message || rooms.error?.message}
         </p>
       )}
-      <section className="mt-8 rounded-2xl border p-5">
-        <JoinRoomForm />
-      </section>
     </main>
   );
 }

@@ -10,7 +10,8 @@
     "db:generate": "prisma generate",
     "db:validate": "prisma validate",
     "db:migrate": "prisma migrate deploy",
-    "catalog": "tsx src/content/cli.ts"
+    "catalog": "tsx src/content/cli.ts",
+    "catalog:grow": "tsx src/content/grow.ts"
   },
   "dependencies": {
     "@filmless/contracts": "workspace:*",

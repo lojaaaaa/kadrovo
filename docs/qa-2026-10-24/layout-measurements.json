@@ -1,0 +1,59 @@
+{
+  "chronology": [
+    {
+      "h": 640,
+      "route": "/play/chronology",
+      "scroll": 640,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 1024,
+      "route": "/play/chronology",
+      "scroll": 1024,
+      "sw": 757,
+      "w": 768
+    },
+    {
+      "h": 768,
+      "route": "/play/chronology",
+      "scroll": 768,
+      "sw": 1355,
+      "w": 1366
+    }
+  ],
+  "player": [
+    {
+      "h": 768,
+      "route": "/room/A92A1B5E",
+      "scroll": 768,
+      "skipBottom": 665.90625,
+      "sw": 1355,
+      "w": 1366
+    },
+    {
+      "h": 1024,
+      "route": "/room/A92A1B5E",
+      "scroll": 1024,
+      "skipBottom": 854.875,
+      "sw": 757,
+      "w": 768
+    },
+    {
+      "h": 640,
+      "route": "/room/A92A1B5E",
+      "scroll": 640,
+      "skipBottom": 536,
+      "sw": 349,
+      "w": 360
+    },
+    {
+      "h": 390,
+      "route": "/room/A92A1B5E",
+      "scroll": 390,
+      "skipBottom": 344,
+      "sw": 833,
+      "w": 844
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   Logger,
   NotFoundException,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { randomBytes, createHash } from 'node:crypto';
@@ -24,6 +25,7 @@ export type DailyProgress = {
   solved?: boolean;
 };
 export type Experience = {
+  trials?: { solo?: string[]; online?: string[] };
   aliases?: string[];
   removedWatchlist?: string[];
   challenges?: Record<string, DailyProgress>;
@@ -161,6 +163,27 @@ export class ExperienceService implements OnModuleDestroy {
     if (!data) throw new Error('История ещё загружается.');
     return data;
   }
+  assertTrial(subject: string, kind: 'solo' | 'online', matchId?: string) {
+    if (!subject.startsWith('guest:')) return;
+    const played = this.get(subject).trials?.[kind] ?? [];
+    const limit = kind === 'solo' ? 5 : 3;
+    if ((!matchId || !played.includes(matchId)) && played.length >= limit)
+      throw new ForbiddenException({
+        code: 'GUEST_LIMIT',
+        message: `Гостевые игры закончились. Войдите или зарегистрируйтесь, чтобы продолжить.`,
+        loginUrl: `/account?reason=guest-${kind}`,
+      });
+  }
+  useTrial(subject: string, kind: 'solo' | 'online', matchId: string) {
+    if (!subject.startsWith('guest:')) return;
+    this.assertTrial(subject, kind, matchId);
+    const data = this.get(subject);
+    data.trials ??= {};
+    const played = (data.trials[kind] ??= []);
+    if (played.includes(matchId)) return;
+    played.push(matchId);
+    this.save(subject);
+  }
   seen(subjects: string[]) {
     const result: Record<string, number> = {};
     for (const s of subjects)
@@ -238,6 +261,11 @@ export class ExperienceService implements OnModuleDestroy {
       day = shift(day, -1);
     }
     return {
+      access: {
+        guest: subject.startsWith('guest:'),
+        soloRemaining: Math.max(0, 5 - (data.trials?.solo?.length ?? 0)),
+        onlineRemaining: Math.max(0, 3 - (data.trials?.online?.length ?? 0)),
+      },
       currentDaily: {
         ...window,
         status:

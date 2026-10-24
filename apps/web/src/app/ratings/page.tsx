@@ -24,6 +24,12 @@ export default function RatingsPage() {
     refetchInterval: 15000,
   });
   const me = query.data?.me;
+  if (query.isPending)
+    return (
+      <main className="screen screen--ratings px-3 py-5 sm:px-5 md:py-8">
+        <SectionSkeleton kind="home" />
+      </main>
+    );
   return (
     <main className="screen screen--ratings mx-auto max-w-7xl px-3 py-5 sm:px-5 md:py-8">
       <div className="mb-5 flex items-center gap-3">
@@ -31,7 +37,7 @@ export default function RatingsPage() {
         <div>
           <h1 className="text-2xl font-bold">Рейтинг киноманов</h1>
           <p className="text-sm text-muted-foreground">
-            Случайные дуэли · 100 лучших игроков
+            Рейтинговые дуэли · 100 лучших игроков
           </p>
         </div>
       </div>
@@ -51,8 +57,8 @@ export default function RatingsPage() {
                 {query.data?.place
                   ? `Место #${query.data.place}`
                   : me
-                    ? 'Первый батл впереди'
-                    : 'Присоединяйтесь к игре'}
+                    ? 'Сыграйте первую дуэль'
+                    : 'Войдите, чтобы участвовать'}
               </p>
             </div>
           </div>
@@ -73,7 +79,7 @@ export default function RatingsPage() {
             className="mt-5 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground"
           >
             <Swords className="size-4" />
-            {me ? 'Играть батл' : 'Войти в рейтинг'}
+            {me ? 'Найти соперника' : 'Войти в рейтинг'}
           </Link>
           {me && (
             <Link
@@ -93,9 +99,7 @@ export default function RatingsPage() {
               <Trophy className="size-4" />
               Общий рейтинг
             </span>
-            <span className="text-xs text-muted-foreground">
-              Elo · старт 1000
-            </span>
+            <span className="text-xs text-muted-foreground">Elo</span>
           </div>
           <div className="md:max-h-[calc(100dvh-265px)] md:overflow-y-auto md:pr-1">
             {query.isPending ? (
@@ -107,9 +111,9 @@ export default function RatingsPage() {
             ) : !query.data?.players.length ? (
               <div className="py-16 text-center">
                 <Trophy className="mx-auto mb-4 size-10 text-primary/50" />
-                <h3 className="font-semibold">Первое место свободно</h3>
+                <h3 className="font-semibold">Пока нет результатов</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Завершите батл, чтобы появиться в таблице.
+                  Завершите рейтинговую дуэль, чтобы появиться в таблице.
                 </p>
               </div>
             ) : (
@@ -160,9 +164,9 @@ export default function RatingsPage() {
         </section>
       </div>
       <p className="mt-5 max-w-3xl text-xs leading-relaxed text-muted-foreground">
-        Рейтинг меняется после батла с учётом силы соперника. Ничья учитывается,
-        выход из начавшегося батла — поражение. Соло и игры с друзьями на
-        рейтинг не влияют.
+        Рейтинг меняется после дуэли с учётом силы соперника. Ничья учитывается,
+        выход из начавшейся дуэли — поражение. Соло и игры с друзьями на рейтинг
+        не влияют.
       </p>
     </main>
   );

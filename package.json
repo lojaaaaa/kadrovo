@@ -26,7 +26,9 @@
     "catalog": "pnpm --filter @filmless/api catalog",
     "test:content": "pnpm --filter @filmless/api exec tsx src/content/integration.ts",
     "test:auth": "pnpm --filter @filmless/api exec tsx src/auth/integration.ts",
-    "test:product": "node scripts/smoke-product.mjs"
+    "test:product": "node scripts/smoke-product.mjs",
+    "test:chronology": "node scripts/smoke-chronology.mjs",
+    "test:guest": "node scripts/smoke-guest-access.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

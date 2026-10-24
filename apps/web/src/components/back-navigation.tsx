@@ -4,9 +4,14 @@ import { usePathname } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 export function BackNavigation() {
   const path = usePathname();
-  if (path === '/' || path.startsWith('/room/')) return null;
+  if (path === '/' || path === '/play/chronology' || path.startsWith('/room/'))
+    return null;
   const parent =
-    path === '/play/party' ? '/lobbies' : path === '/lobbies' ? '/online' : '/';
+    path === '/play/party'
+      ? '/lobbies'
+      : ['/lobbies', '/ratings', '/battle'].includes(path)
+        ? '/online'
+        : '/';
   return (
     <nav className="back-navigation" aria-label="Возврат">
       <Link href={parent}>
