@@ -31,20 +31,20 @@
     "test:guest": "node scripts/smoke-guest-access.mjs"
   },
   "devDependencies": {
-    "@eslint/js": "9.39.5",
-    "eslint": "9.39.5",
-    "eslint-config-next": "16.4.2",
-    "typescript-eslint": "^8.46.0",
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "eslint-config-next": "16.4.3",
+    "typescript-eslint": "^8.72.1",
     "eslint-config-prettier": "^10.1.0",
     "prettier": "^3.6.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.0",
-    "@commitlint/cli": "^20.1.0",
-    "@commitlint/config-conventional": "^20.0.0",
-    "typescript": "^5.9.3",
-    "vitest": "^3.2.4",
-    "concurrently": "^9.2.1",
-    "@types/node": "^24.10.0"
+    "lint-staged": "^17.6.0",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5",
+    "concurrently": "^10.0.6",
+    "@types/node": "^26.6.5"
   },
   "lint-staged": {
     "*.{js,mjs,cjs,ts,tsx}": [
