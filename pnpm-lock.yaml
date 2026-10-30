@@ -70,11 +70,11 @@ importers:
         specifier: 12.2.0
         version: 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(supports-color@8.1.1)
       '@nestjs/platform-socket.io':
-        specifier: 12.2.0
-        version: 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/websockets@12.2.0)(rxjs@7.8.2)(supports-color@8.1.1)
+        specifier: 12.3.2
+        version: 12.3.2(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/websockets@12.2.0)(rxjs@7.8.2)(supports-color@8.1.1)
       '@nestjs/websockets':
         specifier: 12.2.0
-        version: 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(@nestjs/platform-socket.io@12.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+        version: 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(@nestjs/platform-socket.io@12.3.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@prisma/adapter-pg':
         specifier: 7.10.1
         version: 7.10.1
@@ -843,8 +843,8 @@ packages:
       '@nestjs/common': ^12.0.0
       '@nestjs/core': ^12.0.0
 
-  '@nestjs/platform-socket.io@12.2.0':
-    resolution: {integrity: sha512-Fkb5kG0jBFyJ6tK5x7IaQTdD94nv5wff68caEhp7b3VJ4kRoYgAMP6+u8gu9E3AQGupBI5dkPGUXMIO5l7pL5g==}
+  '@nestjs/platform-socket.io@12.3.2':
+    resolution: {integrity: sha512-IWQnh9+IJEJCN8zWDwurobw6Rc/N/DugNTyXxoaYcSo+7raYDjdjOEdhHheLXyvFpDodCN/RPBqyD4HQDlY4lw==}
     peerDependencies:
       '@nestjs/common': ^12.0.0
       '@nestjs/websockets': ^12.0.0
@@ -5454,7 +5454,7 @@ snapshots:
       uid: 2.0.2
     optionalDependencies:
       '@nestjs/platform-express': 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(supports-color@8.1.1)
-      '@nestjs/websockets': 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(@nestjs/platform-socket.io@12.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/websockets': 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(@nestjs/platform-socket.io@12.3.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
 
   '@nestjs/platform-express@12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(supports-color@8.1.1)':
     dependencies:
@@ -5468,10 +5468,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@nestjs/platform-socket.io@12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/websockets@12.2.0)(rxjs@7.8.2)(supports-color@8.1.1)':
+  '@nestjs/platform-socket.io@12.3.2(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/websockets@12.2.0)(rxjs@7.8.2)(supports-color@8.1.1)':
     dependencies:
       '@nestjs/common': 12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
-      '@nestjs/websockets': 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(@nestjs/platform-socket.io@12.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
+      '@nestjs/websockets': 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(@nestjs/platform-socket.io@12.3.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       rxjs: 7.8.2
       socket.io: 4.8.4(supports-color@8.1.1)
       tslib: 2.8.1
@@ -5480,7 +5480,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@nestjs/websockets@12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(@nestjs/platform-socket.io@12.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
+  '@nestjs/websockets@12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/core@12.2.0)(@nestjs/platform-socket.io@12.3.2)(reflect-metadata@0.2.2)(rxjs@7.8.2)':
     dependencies:
       '@nestjs/common': 12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
       '@nestjs/core': 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/platform-express@12.2.0)(@nestjs/websockets@12.2.0)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -5490,7 +5490,7 @@ snapshots:
       rxjs: 7.8.2
       tslib: 2.8.1
     optionalDependencies:
-      '@nestjs/platform-socket.io': 12.2.0(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/websockets@12.2.0)(rxjs@7.8.2)(supports-color@8.1.1)
+      '@nestjs/platform-socket.io': 12.3.2(@nestjs/common@12.2.0(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1))(@nestjs/websockets@12.2.0)(rxjs@7.8.2)(supports-color@8.1.1)
 
   '@next/env@16.4.2': {}
 
